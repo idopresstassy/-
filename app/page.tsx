@@ -6,6 +6,8 @@ import { useState, useEffect } from "react";
 import { Book } from "@/lib/books";
 import { useBooks } from "@/lib/useBooks";
 import BookReader from "@/components/BookReader";
+import { useAuth } from "@/lib/AuthContext";
+import AuthModal from "@/components/AuthModal";
 import {
   Search,
   BookOpen,
@@ -13,15 +15,22 @@ import {
   Settings,
   Loader2,
   X,
+  LogIn,
+  LogOut,
+  User,
 } from "lucide-react";
+
+const GENRES = ["전체", "고전", "현대", "해외"] as const;
 
 export default function Home() {
   const [currentBook, setCurrentBook] = useState<Book | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedGenre, setSelectedGenre] = useState<string>("전체");
   const [showDonationModal, setShowDonationModal] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
   const { books, isLoaded } = useBooks();
+  const { user, isAdmin, signOut } = useAuth();
 
-  // ESC 키로 모달 닫기
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") setShowDonationModal(false);
@@ -32,22 +41,52 @@ export default function Home() {
     }
   }, [showDonationModal]);
 
-  const filteredBooks = books.filter(
-    (book) =>
-      book.title.includes(searchTerm) || book.author.includes(searchTerm)
-  );
+  const filteredBooks = books.filter((book) => {
+    const matchesSearch =
+      book.title.includes(searchTerm) || book.author.includes(searchTerm);
+    const matchesGenre =
+      selectedGenre === "전체" || book.genre === selectedGenre;
+    return matchesSearch && matchesGenre;
+  });
 
   return (
     <div className="min-h-screen pb-20 bg-[#fdfbf7]">
       {/* Header */}
       <header className="pt-16 pb-8 px-6 text-center border-b border-gray-100 bg-white/50 backdrop-blur-sm sticky top-0 z-10 relative">
-        <Link
-          href="/admin"
-          className="absolute top-6 right-6 p-2 text-gray-400 hover:text-gray-900 transition-colors rounded-full hover:bg-gray-100"
-          title="관리자 페이지"
-        >
-          <Settings className="w-5 h-5" />
-        </Link>
+        <div className="absolute top-6 right-6 flex items-center gap-2">
+          {user ? (
+            <>
+              <span className="text-xs text-gray-500 hidden sm:inline">
+                <User className="w-3 h-3 inline mr-1" />
+                {user.email}
+              </span>
+              {isAdmin && (
+                <Link
+                  href="/admin"
+                  className="p-2 text-gray-400 hover:text-gray-900 transition-colors rounded-full hover:bg-gray-100"
+                  title="관리자 페이지"
+                >
+                  <Settings className="w-5 h-5" />
+                </Link>
+              )}
+              <button
+                onClick={() => signOut()}
+                className="p-2 text-gray-400 hover:text-gray-900 transition-colors rounded-full hover:bg-gray-100"
+                title="로그아웃"
+              >
+                <LogOut className="w-5 h-5" />
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => setShowAuthModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 border border-gray-200 rounded-full hover:bg-gray-50 transition-colors"
+            >
+              <LogIn className="w-4 h-4" />
+              로그인
+            </button>
+          )}
+        </div>
 
         <div className="flex items-center justify-center gap-3 mb-2">
           <Image
@@ -70,7 +109,7 @@ export default function Home() {
         </button>
 
         {/* Search */}
-        <div className="max-w-md mx-auto relative group">
+        <div className="max-w-md mx-auto relative group mb-4">
           <input
             type="text"
             placeholder="도서명 또는 작가 검색..."
@@ -81,6 +120,23 @@ export default function Home() {
           <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
             <Search className="w-5 h-5" />
           </div>
+        </div>
+
+        {/* Genre Filter */}
+        <div className="flex justify-center gap-2">
+          {GENRES.map((genre) => (
+            <button
+              key={genre}
+              onClick={() => setSelectedGenre(genre)}
+              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+                selectedGenre === genre
+                  ? "bg-gray-900 text-white"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              {genre}
+            </button>
+          ))}
         </div>
       </header>
 
@@ -99,7 +155,7 @@ export default function Home() {
                   className="bg-white rounded-xl p-6 shadow-sm hover:shadow-md transition-all border border-gray-100 flex flex-col md:flex-row gap-6 items-start md:items-center"
                 >
                   <div className="flex-1">
-                    <div className="flex items-baseline gap-3 mb-2">
+                    <div className="flex items-baseline gap-3 mb-1">
                       <h3 className="text-xl font-bold text-gray-900 font-serif">
                         {book.title}
                       </h3>
@@ -107,9 +163,9 @@ export default function Home() {
                         {book.author}
                       </span>
                     </div>
-                    <p className="text-gray-600 text-sm leading-relaxed line-clamp-2 md:line-clamp-none">
-                      {book.summary}
-                    </p>
+                    <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-amber-50 text-amber-700 border border-amber-100">
+                      {book.genre}
+                    </span>
                   </div>
 
                   <div className="flex gap-3 w-full md:w-auto shrink-0">
@@ -148,12 +204,15 @@ export default function Home() {
       {/* Reader Overlay */}
       {currentBook && (
         <BookReader
+          bookId={currentBook.id}
           title={currentBook.title}
-          initialContent={currentBook.content}
-          googleDocUrl={currentBook.googleDocUrl}
+          content={currentBook.content}
           onClose={() => setCurrentBook(null)}
         />
       )}
+
+      {/* Auth Modal */}
+      {showAuthModal && <AuthModal onClose={() => setShowAuthModal(false)} />}
 
       {/* 후원 안내 모달 */}
       {showDonationModal && (
@@ -165,7 +224,6 @@ export default function Home() {
             className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[85vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* 모달 헤더 */}
             <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center rounded-t-2xl">
               <h2 className="text-xl font-bold text-gray-900 font-serif">
                 한국문학도서관을 응원해 주세요
@@ -178,7 +236,6 @@ export default function Home() {
               </button>
             </div>
 
-            {/* 모달 내용 */}
             <div className="px-6 py-5 space-y-4 text-gray-700 text-sm leading-relaxed">
               <p>
                 무료로 제공되는 이 문학도서관은 개인의 노력으로 운영되고
@@ -193,7 +250,6 @@ export default function Home() {
                 않습니다.
               </p>
 
-              {/* 후원 방법 */}
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mt-4">
                 <h3 className="font-bold text-gray-900 mb-3">후원 방법</h3>
                 <div className="space-y-1">
@@ -226,49 +282,6 @@ export default function Home() {
               </p>
               <p className="font-medium text-gray-900">이도출판 대표 홍기환</p>
 
-              {/* 도서 목록 */}
-              <div className="border-t border-gray-200 pt-4 mt-4">
-                <h3 className="font-bold text-gray-900 mb-3">
-                  한국문학도서관 목록 (현재 101권)
-                </h3>
-                <div className="text-xs text-gray-600 space-y-2 leading-relaxed">
-                  <p>
-                    <strong>심훈</strong>_상록수 / <strong>나도향</strong>_뽕,
-                    물레방아, 벙어리삼룡이 / <strong>김동인</strong>_감자,
-                    광염소나타, 광화사, 김연실전, 발가락이 닮았다, 배따라기,
-                    붉은산, 약한자의 슬픔, 태형 / <strong>강경애</strong>
-                    _인간문제, 지하촌 / <strong>김유정</strong>_소낙비, 금따는
-                    콩밭, 동백꽃, 만무방, 봄봄 / <strong>현진건</strong>
-                    _술권하는사회, B사감과 러브레터, 고향, 불, 빈처, 운수좋은날,
-                    할머니의 죽음 / <strong>채만식</strong>_레디메이드인생,
-                    논이야기, 치숙, 탁류, 태평천하 / <strong>김남천</strong>
-                    _대하, 처를 때리고 / <strong>안국선</strong>_금수회의록 /{" "}
-                    <strong>이광수</strong>_꿈, 무정, 소년의비애, 유정, 흙 /{" "}
-                    <strong>이상</strong>_날개, 봉별기, 종생기 /{" "}
-                    <strong>조명희</strong>_낙동강 / <strong>최서해</strong>
-                    _고국, 박돌의죽음, 탈출기, 홍염 / <strong>이효석</strong>
-                    _메밀꽃 필 무렵, 도시와 유령, 들, 분녀, 산, 돈, 장미병들다,
-                    화분 / <strong>김구</strong>_백범일지 /{" "}
-                    <strong>임춘</strong>_공방전 / <strong>임제</strong>
-                    _원생몽유록 / <strong>이욱</strong>_부목한전, 심생전 /{" "}
-                    <strong>이덕무</strong>_은애전 / <strong>이규보</strong>
-                    _청강사자현부전 / <strong>안정복</strong>_여용국전 /{" "}
-                    <strong>유몽인</strong>_홍도, 유우춘전 /{" "}
-                    <strong>신광한</strong>_안빙몽유록 / <strong>보우</strong>
-                    _왕랑반혼전 / <strong>박지원</strong>_호질, 예덕선생전, 열녀
-                    함양박씨전, 양반전, 민옹전, 마장전, 김신신전, 허생전,
-                    광문자전 / <strong>김시습</strong>_취유부벽정기, 용궁부연록,
-                    만복사저포기, 남염부주지, 이생규장전 / <strong>권필</strong>
-                    _주생전 / <strong>김만중</strong>_사씨남정기, 구운몽 /{" "}
-                    <strong>이곡</strong>_죽부인전 / <strong>작자미상</strong>
-                    _흥부전, 심청전, 박문수전, 배비장전, 오유란전, 숙영낭자전,
-                    금방울전, 서동지전, 장끼전, 토끼전, 변강쇠가, 옹고집전,
-                    이춘풍전, 용부전
-                  </p>
-                </div>
-              </div>
-
-              {/* 법적 고지 */}
               <div className="bg-gray-100 rounded-lg p-3 text-xs text-gray-500 mt-4">
                 ※ 본 페이지의 후원금은 「기부금품법」상의 법정 기부금이 아닌,
                 운영자 개인에 대한 자발적 후원금으로 세제공제 대상이 아닙니다.

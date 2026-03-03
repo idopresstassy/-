@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Noto_Serif_KR } from "next/font/google";
+import { AuthProvider } from "@/lib/AuthContext";
 import "./globals.css";
 
 const notoSerifKR = Noto_Serif_KR({
@@ -21,7 +22,7 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <body className={`${notoSerifKR.className} antialiased bg-[#fdfbf7]`}>
-        {children}
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );

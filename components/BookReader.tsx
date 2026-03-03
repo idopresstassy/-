@@ -8,6 +8,7 @@ import React, {
   useMemo,
 } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useReadingProgress } from "@/lib/useReadingProgress";
 import {
   X,
   ChevronLeft,
@@ -18,17 +19,15 @@ import {
   Sun,
   Moon,
   Coffee,
-  Cloud,
-  ExternalLink,
   Loader2,
   Columns,
   Smartphone,
 } from "lucide-react";
 
 interface BookReaderProps {
+  bookId: string;
   title: string;
-  initialContent: string[];
-  googleDocUrl?: string;
+  content: string;
   onClose: () => void;
 }
 
@@ -41,20 +40,19 @@ const THEME_CLASSES = {
 } as const;
 
 export default function BookReader({
+  bookId,
   title,
-  initialContent,
-  googleDocUrl,
+  content,
   onClose,
 }: BookReaderProps) {
-  const [content, setContent] = useState<string[]>(initialContent);
-  const [isLoading, setIsLoading] = useState(!!googleDocUrl);
+  const lines = useMemo(() => content.split("\n").filter((l) => l.trim()), [content]);
+  const { savedLineIndex, saveProgress, isProgressLoaded } = useReadingProgress(bookId);
+  const [hasRestoredProgress, setHasRestoredProgress] = useState(false);
 
-  // Layout & Dimensions
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [isReady, setIsReady] = useState(false);
 
-  // View State
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [isTwoPageMode, setIsTwoPageMode] = useState(false);
@@ -62,48 +60,17 @@ export default function BookReader({
   const [totalColumns, setTotalColumns] = useState(0);
   const [containerWidth, setContainerWidth] = useState<number | null>(null);
 
-  // Appearance State
   const [fontSize, setFontSize] = useState(20);
   const [lineHeight, setLineHeight] = useState(1.8);
   const [theme, setTheme] = useState<Theme>("light");
   const [showSettings, setShowSettings] = useState(false);
 
-  // Feature State
   const [bookmarks, setBookmarks] = useState<number[]>([]);
 
-  // Touch State
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
 
   const GAP_SIZE = 40;
-
-  useEffect(() => {
-    const fetchGoogleDocContent = async () => {
-      if (!googleDocUrl) return;
-      try {
-        setIsLoading(true);
-        // Use our internal proxy to avoid CORS issues
-        const response = await fetch(
-          `/api/doc-proxy?url=${encodeURIComponent(googleDocUrl)}`
-        );
-
-        if (!response.ok) throw new Error("Failed to fetch document");
-
-        const text = await response.text();
-        const paragraphs = text.split("\n").filter((p) => p.trim() !== "");
-        setContent(paragraphs);
-      } catch (error) {
-        console.error("Failed to fetch Google Doc content:", error);
-        setContent([
-          "문서를 불러오는데 실패했습니다.",
-          "잠시 후 다시 시도해주세요.",
-        ]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchGoogleDocContent();
-  }, [googleDocUrl]);
 
   const measure = useCallback(() => {
     if (!containerRef.current) return;
@@ -114,14 +81,12 @@ export default function BookReader({
 
     if (clientWidth <= 0 || clientHeight <= 0) return;
 
-    // Calculate margins: Mobile 32px, Desktop 48px
     const margin = clientWidth > 768 ? 48 : 32;
     let availableWidth = clientWidth - margin * 2;
 
     const isTwoPage = availableWidth > 800;
     setIsTwoPageMode(isTwoPage);
 
-    // Adjust available width for exact column calculations
     if (isTwoPage) {
       const colWidth = Math.floor((availableWidth - GAP_SIZE) / 2);
       availableWidth = colWidth * 2 + GAP_SIZE;
@@ -138,7 +103,6 @@ export default function BookReader({
     let resizeTimer: NodeJS.Timeout;
 
     const handleResize = () => {
-      // 모바일 주소표시줄 변경 무시: width가 변경된 경우만 재계산
       const currentWidth = window.innerWidth;
       if (Math.abs(currentWidth - lastWidth) > 5) {
         clearTimeout(resizeTimer);
@@ -156,7 +120,6 @@ export default function BookReader({
     };
   }, [measure]);
 
-  // Calculate column dimensions with memoization
   const columnDimensions = useMemo(() => {
     if (!isReady) return { colWidth: 0, colHeight: 0 };
 
@@ -173,64 +136,36 @@ export default function BookReader({
 
   const contentRef = useRef<HTMLDivElement>(null);
 
-  // Reset container width when content or settings change
   useEffect(() => {
     setContainerWidth(null);
-  }, [dimensions, fontSize, lineHeight, content, isTwoPageMode]);
+  }, [dimensions, fontSize, lineHeight, lines, isTwoPageMode]);
 
   useEffect(() => {
     if (!isReady || !contentRef.current || dimensions.width === 0) return;
 
-    // Wait for layout to settle
     const timer = setTimeout(() => {
       if (contentRef.current) {
         const scrollWidth = contentRef.current.scrollWidth;
         const { colWidth } = columnDimensions;
 
-        // Estimate number of columns created by CSS
-        // scrollWidth = totalColumns * columnWidth + (totalColumns - 1) * gap
-        // Solve for totalColumns
         const estimatedColumns = Math.round(
           (scrollWidth + GAP_SIZE) / (colWidth + GAP_SIZE)
         );
 
         setTotalColumns(estimatedColumns);
 
-        // Only set container width on first measurement
         if (containerWidth === null) {
-          // Calculate exact container width to force exact column widths
-          // containerWidth = columns * colWidth + (columns - 1) * gap
           const exactWidth =
             estimatedColumns * colWidth + (estimatedColumns - 1) * GAP_SIZE;
           setContainerWidth(exactWidth);
-
-          console.log(
-            `📐 First render - Setting container width: ${exactWidth}px for ${estimatedColumns} columns (${colWidth}px each)`
-          );
-        } else {
-          // On second render with explicit width, verify it worked
-          const actualColumnWidth =
-            estimatedColumns > 0
-              ? (scrollWidth - (estimatedColumns - 1) * GAP_SIZE) /
-                estimatedColumns
-              : colWidth;
-          const difference = Math.abs(colWidth - actualColumnWidth);
-          const status = difference < 0.1 ? "✅" : "⚠️";
-          console.log(
-            `${status} Second render - Expected: ${colWidth}px, Actual: ${actualColumnWidth.toFixed(
-              2
-            )}px, Difference: ${difference.toFixed(2)}px`
-          );
         }
 
-        // Calculate stride based on exact column width (not adjusted)
         const columnsPerView = isTwoPageMode ? 2 : 1;
         const finalStride =
           columnsPerView * colWidth + columnsPerView * GAP_SIZE;
 
         setStride(finalStride);
 
-        // Calculate total pages (how many "views" of columnsPerView we need)
         const pages = Math.ceil(estimatedColumns / columnsPerView);
         setTotalPages(Math.max(1, pages));
 
@@ -241,12 +176,58 @@ export default function BookReader({
     return () => clearTimeout(timer);
   }, [
     isReady,
-    content,
+    lines,
     containerWidth,
     columnDimensions,
     isTwoPageMode,
     GAP_SIZE,
   ]);
+
+  // Track current visible line and save progress on page change
+  const getCurrentLineIndex = useCallback(() => {
+    if (!contentRef.current) return 0;
+    const paragraphs = contentRef.current.querySelectorAll("[data-line-index]");
+    const viewportLeft = currentPage * stride;
+
+    for (const el of paragraphs) {
+      const htmlEl = el as HTMLElement;
+      if (htmlEl.offsetLeft >= viewportLeft) {
+        return parseInt(htmlEl.dataset.lineIndex || "0", 10);
+      }
+    }
+    return 0;
+  }, [currentPage, stride]);
+
+  useEffect(() => {
+    if (totalPages > 1 && stride > 0) {
+      const lineIdx = getCurrentLineIndex();
+      saveProgress(lineIdx);
+    }
+  }, [currentPage, totalPages, stride, getCurrentLineIndex, saveProgress]);
+
+  // Restore reading position
+  useEffect(() => {
+    if (
+      hasRestoredProgress ||
+      !isProgressLoaded ||
+      savedLineIndex === null ||
+      savedLineIndex === 0 ||
+      !contentRef.current ||
+      totalPages <= 1 ||
+      stride === 0
+    ) return;
+
+    const targetEl = contentRef.current.querySelector(
+      `[data-line-index="${savedLineIndex}"]`
+    ) as HTMLElement | null;
+
+    if (targetEl) {
+      const targetLeft = targetEl.offsetLeft;
+      const page = Math.floor(targetLeft / stride);
+      setCurrentPage(Math.min(page, totalPages - 1));
+    }
+    setHasRestoredProgress(true);
+  }, [isProgressLoaded, savedLineIndex, totalPages, stride, hasRestoredProgress]);
 
   const nextPage = useCallback(() => {
     setCurrentPage((prev) => (prev < totalPages - 1 ? prev + 1 : prev));
@@ -272,10 +253,10 @@ export default function BookReader({
         ? prev.filter((p) => p !== currentPage)
         : [...prev, currentPage].sort((a, b) => a - b);
 
-      localStorage.setItem(`bookmarks-${title}`, JSON.stringify(newBookmarks));
+      localStorage.setItem(`bookmarks-${bookId}`, JSON.stringify(newBookmarks));
       return newBookmarks;
     });
-  }, [currentPage, title]);
+  }, [currentPage, bookId]);
 
   const minSwipeDistance = 50;
 
@@ -320,17 +301,9 @@ export default function BookReader({
           >
             <X className="w-5 h-5" />
           </button>
-          <div className="flex flex-col">
-            <h1 className="text-base font-serif font-bold truncate max-w-[150px] md:max-w-md">
-              {title}
-            </h1>
-            {googleDocUrl && (
-              <span className="text-[10px] text-blue-500 flex items-center gap-1">
-                <Cloud className="w-3 h-3" />
-                Google Doc
-              </span>
-            )}
-          </div>
+          <h1 className="text-base font-serif font-bold truncate max-w-[150px] md:max-w-md">
+            {title}
+          </h1>
         </div>
 
         <div className="flex items-center gap-1">
@@ -488,20 +461,6 @@ export default function BookReader({
                   </button>
                 </div>
               </div>
-
-              {googleDocUrl && (
-                <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-                  <a
-                    href={googleDocUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-between w-full p-3 text-sm bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors"
-                  >
-                    <span>원본 문서 열기</span>
-                    <ExternalLink className="w-4 h-4" />
-                  </a>
-                </div>
-              )}
             </div>
           </motion.div>
         )}
@@ -509,7 +468,7 @@ export default function BookReader({
 
       {/* Main Content Area */}
       <main className="flex-1 relative w-full h-full overflow-hidden flex items-center justify-center">
-        {(isLoading || !isReady) && (
+        {(!isReady || !isProgressLoaded) && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-inherit">
             <Loader2 className="w-10 h-10 animate-spin text-amber-500" />
             <p className="font-serif">문서를 불러오는 중입니다...</p>
@@ -519,7 +478,7 @@ export default function BookReader({
         <div
           ref={containerRef}
           className={`relative w-full h-full max-w-[1200px] mx-auto transition-all duration-300 ${
-            isLoading || !isReady ? "opacity-0" : "opacity-100"
+            !isReady || !isProgressLoaded ? "opacity-0" : "opacity-100"
           }`}
           style={{
             paddingTop: isTwoPageMode ? "40px" : "20px",
@@ -556,7 +515,6 @@ export default function BookReader({
                   columnGap: `${GAP_SIZE}px`,
                   columnFill: "auto",
                   height: `${columnDimensions.colHeight}px`,
-                  // Use explicit width if calculated, otherwise let it be max-content
                   width:
                     containerWidth !== null
                       ? `${containerWidth}px`
@@ -573,9 +531,9 @@ export default function BookReader({
                   <div className="w-10 h-1 bg-amber-500 mx-auto opacity-50"></div>
                 </div>
 
-                {content.map((paragraph, idx) => (
-                  <p key={idx} className="mb-6 break-inside-avoid indent-1">
-                    {paragraph}
+                {lines.map((line, idx) => (
+                  <p key={idx} data-line-index={idx} className="mb-6 break-inside-avoid indent-1">
+                    {line}
                   </p>
                 ))}
 
@@ -613,7 +571,7 @@ export default function BookReader({
           <div className="flex items-center gap-6 mx-auto md:mx-0">
             <button
               onClick={prevPage}
-              disabled={currentPage === 0 || isLoading}
+              disabled={currentPage === 0}
               className="group flex items-center gap-2 disabled:opacity-30 hover:text-amber-600 transition-colors"
             >
               <ChevronLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
@@ -621,12 +579,12 @@ export default function BookReader({
             </button>
 
             <span className="font-mono text-sm font-medium min-w-[60px] text-center">
-              {isLoading ? "-" : `${currentPage + 1} / ${totalPages}`}
+              {`${currentPage + 1} / ${totalPages}`}
             </span>
 
             <button
               onClick={nextPage}
-              disabled={currentPage >= totalPages - 1 || isLoading}
+              disabled={currentPage >= totalPages - 1}
               className="group flex items-center gap-2 disabled:opacity-30 hover:text-amber-600 transition-colors"
             >
               <span className="text-sm font-medium hidden sm:inline">다음</span>
