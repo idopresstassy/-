@@ -36,25 +36,23 @@ export default function Home() {
         <div className="container flex items-center justify-between h-16">
           <Link href="/" className="flex items-center gap-2">
             <BookOpen className="w-6 h-6 text-primary" />
-            <h1 className="text-xl font-bold text-foreground font-serif">한국문학도서관</h1>
+            <h1 className="text-xl font-bold text-foreground font-serif">문학도서관</h1>
           </Link>
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="sm" onClick={() => setShowDonation(true)}>
               <Heart className="w-4 h-4 mr-1" /> 후원
             </Button>
-            {isAuthenticated ? (
-              <>
-                {user?.role === "admin" && (
-                  <Link href="/admin">
-                    <Button variant="ghost" size="sm">
-                      <Settings className="w-4 h-4 mr-1" /> 관리
-                    </Button>
-                  </Link>
-                )}
-                <Button variant="ghost" size="sm" onClick={() => logout()}>
-                  <LogOut className="w-4 h-4 mr-1" /> 로그아웃
+            {isAuthenticated && user?.role === "admin" && (
+              <Link href="/admin">
+                <Button variant="ghost" size="sm">
+                  <Settings className="w-4 h-4 mr-1" /> 관리
                 </Button>
-              </>
+              </Link>
+            )}
+            {isAuthenticated ? (
+              <Button variant="ghost" size="sm" onClick={() => logout()}>
+                <LogOut className="w-4 h-4 mr-1" /> 로그아웃
+              </Button>
             ) : (
               <a href={getLoginUrl()}>
                 <Button variant="ghost" size="sm">
@@ -65,6 +63,13 @@ export default function Home() {
           </div>
         </div>
       </header>
+
+      {/* Announcement Banner */}
+      <div className="bg-secondary/70 border-b border-border">
+        <div className="container py-2 text-center">
+          <p className="text-sm text-foreground">한국문화도서관은 여러분의 후원과 구독으로 운영됩니다</p>
+        </div>
+      </div>
 
       {/* Hero */}
       <section className="py-12 bg-gradient-to-b from-secondary/50 to-background">
@@ -117,14 +122,19 @@ export default function Home() {
                   <span className="text-xs px-2 py-0.5 rounded bg-secondary text-secondary-foreground">
                     {book.genre === "classic" ? "고전" : book.genre === "modern" ? "현대" : "해외"}
                   </span>
-                  {book.youtubeUrl && (
-                    <a href={book.youtubeUrl} target="_blank" rel="noopener noreferrer" className="text-red-500 hover:text-red-600">
-                      <Youtube className="w-5 h-5" />
-                    </a>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {book.youtubeUrl && (
+                      <a href={book.youtubeUrl} target="_blank" rel="noopener noreferrer" className="text-red-500 hover:text-red-600">
+                        <Youtube className="w-5 h-5" />
+                      </a>
+                    )}
+                    <span className="text-sm text-muted-foreground">{book.author}</span>
+                  </div>
                 </div>
                 <h3 className="text-lg font-semibold text-foreground mb-1 font-serif">{book.title}</h3>
-                <p className="text-sm text-muted-foreground mb-4">{book.author}</p>
+                {book.description && (
+                  <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{book.description}</p>
+                )}
                 <Link href={`/read/${book.id}`} className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium transition-all disabled:pointer-events-none disabled:opacity-50 border bg-transparent shadow-xs hover:bg-accent hover:text-accent-foreground h-8 rounded-md px-3 text-xs w-full">
                     <BookOpen className="w-4 h-4" /> 읽기
                 </Link>

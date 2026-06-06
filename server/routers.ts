@@ -42,6 +42,7 @@ export const appRouter = router({
         author: z.string().min(1),
         genre: z.enum(["classic", "modern", "foreign"]),
         content: z.string().optional(),
+        description: z.string().optional(),
         youtubeUrl: z.string().optional(),
         googleDriveUrl: z.string().optional(),
       }))
@@ -57,6 +58,7 @@ export const appRouter = router({
         author: z.string().min(1).optional(),
         genre: z.enum(["classic", "modern", "foreign"]).optional(),
         content: z.string().optional(),
+        description: z.string().optional(),
         youtubeUrl: z.string().optional(),
         googleDriveUrl: z.string().optional(),
       }))
