@@ -1,254 +1,641 @@
 import { useAuth } from "@/_core/hooks/useAuth";
-import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
-import { useEffect, useState, useCallback, useRef, useMemo } from "react";
-import { useParams, useLocation } from "wouter";
-import { ArrowLeft, ArrowRight, Bookmark, BookOpen, ChevronLeft, Minus, Plus, Sun } from "lucide-react";
+import { useRoute, useLocation } from "wouter";
+import {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  X,
+  ChevronLeft,
+  ChevronRight,
+  Settings,
+  Bookmark,
+  Type,
+  Sun,
+  Moon,
+  Coffee,
+  Loader2,
+  Columns,
+  Smartphone,
+} from "lucide-react";
 
-const CHARS_PER_PAGE = 1500;
+type Theme = "light" | "dark" | "sepia";
 
-type Theme = "light" | "sepia" | "dark";
-const THEME_STYLES: Record<Theme, { bg: string; text: string; label: string }> = {
-  light: { bg: "bg-white", text: "text-gray-900", label: "라이트" },
-  sepia: { bg: "bg-amber-50", text: "text-amber-900", label: "세피아" },
-  dark: { bg: "bg-gray-900", text: "text-gray-100", label: "다크" },
-};
+const THEME_CLASSES = {
+  light: "bg-[#fdfbf7] text-gray-900",
+  dark: "bg-gray-900 text-gray-100",
+  sepia: "bg-[#f4ecd8] text-[#5b4636]",
+} as const;
 
 export default function Reader() {
-  const params = useParams<{ id: string }>();
-  const [, setLocation] = useLocation();
-  const bookId = Number(params.id);
-  const { user, isAuthenticated } = useAuth();
+  const [, params] = useRoute("/reader/:id");
+  const [, navigate] = useLocation();
+  const bookId = params?.id ? Number(params.id) : 0;
+  const { user } = useAuth();
 
-  const { data: book, isLoading } = trpc.books.getById.useQuery({ id: bookId }, { enabled: !!bookId });
+  // Fetch book data
+  const { data: book, isLoading: bookLoading } = trpc.books.getById.useQuery(
+    { id: bookId },
+    { enabled: bookId > 0 }
+  );
 
-  // 구글 드라이브 URL이 있으면 해당 내용을 프록시로 불러옴
+  // Fetch Google Drive content if available
   const { data: gdriveData, isLoading: gdriveLoading } = trpc.books.fetchGoogleDriveContent.useQuery(
     { url: book?.googleDriveUrl || "" },
     { enabled: !!book?.googleDriveUrl }
   );
 
-  const { data: progress } = trpc.progress.get.useQuery({ bookId }, { enabled: isAuthenticated && !!bookId });
-  const { data: userBookmarks, refetch: refetchBookmarks } = trpc.bookmarks.list.useQuery({ bookId }, { enabled: isAuthenticated && !!bookId });
+  // Reading progress
+  const { data: savedProgress } = trpc.progress.get.useQuery(
+    { bookId },
+    { enabled: bookId > 0 && !!user }
+  );
+  const saveProgressMutation = trpc.progress.save.useMutation();
 
-  const saveProgress = trpc.progress.save.useMutation();
-  const addBookmark = trpc.bookmarks.add.useMutation({ onSuccess: () => refetchBookmarks() });
-  const removeBookmark = trpc.bookmarks.remove.useMutation({ onSuccess: () => refetchBookmarks() });
+  // Bookmarks
+  const { data: userBookmarks } = trpc.bookmarks.list.useQuery(
+    { bookId },
+    { enabled: bookId > 0 && !!user }
+  );
+  const addBookmarkMutation = trpc.bookmarks.add.useMutation();
+  const removeBookmarkMutation = trpc.bookmarks.remove.useMutation();
+  const utils = trpc.useUtils();
+
+  // Determine content
+  const content = useMemo(() => {
+    if (gdriveData?.content) return gdriveData.content;
+    if (book?.content) return book.content;
+    return "";
+  }, [gdriveData, book]);
+
+  const lines = useMemo(() => content.split("\n").filter((l) => l.trim()), [content]);
+
+  // State
+  const containerRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+  const [isReady, setIsReady] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(0);
-  const [theme, setTheme] = useState<Theme>("light");
-  const [fontSize, setFontSize] = useState(18);
+  const [totalPages, setTotalPages] = useState(1);
+  const [isTwoPageMode, setIsTwoPageMode] = useState(false);
+  const [stride, setStride] = useState(0);
+  const [containerWidth, setContainerWidth] = useState<number | null>(null);
+
+  const [fontSize, setFontSize] = useState(20);
   const [lineHeight, setLineHeight] = useState(1.8);
+  const [theme, setTheme] = useState<Theme>("light");
   const [showSettings, setShowSettings] = useState(false);
-  const [showBookmarks, setShowBookmarks] = useState(false);
-  const [progressRestored, setProgressRestored] = useState(false);
 
-  // 콘텐츠 결정: 구글 드라이브 내용 우선, 없으면 DB content 사용
-  const bookContent = useMemo(() => {
-    if (book?.googleDriveUrl && gdriveData?.content) {
-      return gdriveData.content;
+  const [hasRestoredProgress, setHasRestoredProgress] = useState(false);
+
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+
+  const GAP_SIZE = 40;
+
+  const isContentLoading = bookLoading || (!!book?.googleDriveUrl && gdriveLoading);
+
+  // Measure container
+  const measure = useCallback(() => {
+    if (!containerRef.current) return;
+
+    const rect = containerRef.current.getBoundingClientRect();
+    const clientWidth = Math.floor(rect.width);
+    const clientHeight = Math.floor(rect.height);
+
+    if (clientWidth <= 0 || clientHeight <= 0) return;
+
+    const margin = clientWidth > 768 ? 48 : 32;
+    let availableWidth = clientWidth - margin * 2;
+
+    const isTwoPage = availableWidth > 800;
+    setIsTwoPageMode(isTwoPage);
+
+    if (isTwoPage) {
+      const colWidth = Math.floor((availableWidth - GAP_SIZE) / 2);
+      availableWidth = colWidth * 2 + GAP_SIZE;
     }
-    return book?.content || "";
-  }, [book?.googleDriveUrl, book?.content, gdriveData?.content]);
 
-  const pages = useMemo(() => {
-    if (!bookContent) return [];
-    const result: string[] = [];
-    for (let i = 0; i < bookContent.length; i += CHARS_PER_PAGE) {
-      result.push(bookContent.slice(i, i + CHARS_PER_PAGE));
-    }
-    return result.length > 0 ? result : [""];
-  }, [bookContent]);
-
-  const totalPages = pages.length;
+    setDimensions({ width: availableWidth, height: clientHeight });
+    setIsReady(true);
+  }, [GAP_SIZE]);
 
   useEffect(() => {
-    if (progressRestored) return;
-    if (!isAuthenticated) {
-      setProgressRestored(true);
-      return;
-    }
-    if (progress !== undefined) {
-      if (progress && progress.currentPage < totalPages) {
-        setCurrentPage(progress.currentPage);
+    measure();
+
+    let lastWidth = window.innerWidth;
+    let resizeTimer: ReturnType<typeof setTimeout>;
+
+    const handleResize = () => {
+      const currentWidth = window.innerWidth;
+      if (Math.abs(currentWidth - lastWidth) > 5) {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+          lastWidth = currentWidth;
+          measure();
+        }, 150);
       }
-      setProgressRestored(true);
-    }
-  }, [progress, progressRestored, totalPages, isAuthenticated]);
+    };
 
-  const saveRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      clearTimeout(resizeTimer);
+    };
+  }, [measure]);
+
+  // Column dimensions
+  const columnDimensions = useMemo(() => {
+    if (!isReady) return { colWidth: 0, colHeight: 0 };
+
+    const availableWidth = dimensions.width;
+    const colWidth = isTwoPageMode
+      ? Math.floor((availableWidth - GAP_SIZE) / 2)
+      : Math.floor(availableWidth);
+
+    const verticalPadding = isTwoPageMode ? 80 : 40;
+    const colHeight = Math.floor(dimensions.height - verticalPadding - 20);
+
+    return { colWidth, colHeight };
+  }, [isReady, dimensions, isTwoPageMode, GAP_SIZE]);
+
+  // Reset containerWidth when layout changes
   useEffect(() => {
-    if (!isAuthenticated || !progressRestored || totalPages === 0) return;
-    if (saveRef.current) clearTimeout(saveRef.current);
-    saveRef.current = setTimeout(() => {
-      saveProgress.mutate({ bookId, currentPage, totalPages });
-    }, 2000);
-    return () => { if (saveRef.current) clearTimeout(saveRef.current); };
-  }, [currentPage, isAuthenticated, progressRestored, bookId, totalPages]);
+    setContainerWidth(null);
+  }, [dimensions, fontSize, lineHeight, lines, isTwoPageMode]);
 
-  const goNext = useCallback(() => {
-    setCurrentPage((p) => Math.min(p + 1, totalPages - 1));
+  // Calculate columns and pages
+  useEffect(() => {
+    if (!isReady || !contentRef.current || dimensions.width === 0 || lines.length === 0) return;
+
+    const timer = setTimeout(() => {
+      if (contentRef.current) {
+        const scrollWidth = contentRef.current.scrollWidth;
+        const { colWidth } = columnDimensions;
+
+        const estimatedColumns = Math.round(
+          (scrollWidth + GAP_SIZE) / (colWidth + GAP_SIZE)
+        );
+
+        if (containerWidth === null) {
+          const exactWidth =
+            estimatedColumns * colWidth + (estimatedColumns - 1) * GAP_SIZE;
+          setContainerWidth(exactWidth);
+        }
+
+        const columnsPerView = isTwoPageMode ? 2 : 1;
+        const finalStride =
+          columnsPerView * colWidth + columnsPerView * GAP_SIZE;
+
+        setStride(finalStride);
+
+        const pages = Math.ceil(estimatedColumns / columnsPerView);
+        setTotalPages(Math.max(1, pages));
+
+        setCurrentPage((prev) => Math.min(prev, Math.max(0, pages - 1)));
+      }
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [isReady, lines, containerWidth, columnDimensions, isTwoPageMode, GAP_SIZE, dimensions.width]);
+
+  // Save progress on page change
+  useEffect(() => {
+    if (!user || totalPages <= 1 || stride === 0) return;
+    const timer = setTimeout(() => {
+      saveProgressMutation.mutate({
+        bookId,
+        currentPage,
+        totalPages,
+      });
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [currentPage, totalPages, stride, user, bookId]);
+
+  // Restore reading position
+  useEffect(() => {
+    if (
+      hasRestoredProgress ||
+      !savedProgress ||
+      savedProgress.currentPage === 0 ||
+      !contentRef.current ||
+      totalPages <= 1 ||
+      stride === 0
+    ) return;
+
+    setCurrentPage(Math.min(savedProgress.currentPage, totalPages - 1));
+    setHasRestoredProgress(true);
+  }, [savedProgress, totalPages, stride, hasRestoredProgress]);
+
+  // Navigation
+  const nextPage = useCallback(() => {
+    setCurrentPage((prev) => (prev < totalPages - 1 ? prev + 1 : prev));
   }, [totalPages]);
 
-  const goPrev = useCallback(() => {
-    setCurrentPage((p) => Math.max(p - 1, 0));
+  const prevPage = useCallback(() => {
+    setCurrentPage((prev) => (prev > 0 ? prev - 1 : prev));
   }, []);
 
+  // Keyboard navigation
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "ArrowRight" || e.key === "ArrowDown") goNext();
-      else if (e.key === "ArrowLeft" || e.key === "ArrowUp") goPrev();
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "ArrowRight") nextPage();
+      if (e.key === "ArrowLeft") prevPage();
+      if (e.key === "Escape") navigate("/");
     };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [goNext, goPrev]);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [nextPage, prevPage, navigate]);
 
-  const touchStartRef = useRef<number>(0);
-  const handleTouchStart = (e: React.TouchEvent) => { touchStartRef.current = e.touches[0].clientX; };
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    const diff = touchStartRef.current - e.changedTouches[0].clientX;
-    if (diff > 50) goNext();
-    else if (diff < -50) goPrev();
-  };
+  // Bookmark toggle
+  const isCurrentPageBookmarked = useMemo(() => {
+    if (!userBookmarks) return false;
+    return userBookmarks.some((b) => b.page === currentPage);
+  }, [userBookmarks, currentPage]);
 
-  const isBookmarked = userBookmarks?.some((b) => b.page === currentPage);
-
-  const toggleBookmark = () => {
-    if (!isAuthenticated) return;
-    const existing = userBookmarks?.find((b) => b.page === currentPage);
-    if (existing) {
-      removeBookmark.mutate({ id: existing.id });
+  const toggleBookmark = useCallback(() => {
+    if (!user) return;
+    if (isCurrentPageBookmarked) {
+      const bm = userBookmarks?.find((b) => b.page === currentPage);
+      if (bm) {
+        removeBookmarkMutation.mutate(
+          { id: bm.id },
+          { onSuccess: () => utils.bookmarks.list.invalidate({ bookId }) }
+        );
+      }
     } else {
-      addBookmark.mutate({ bookId, page: currentPage, label: `${currentPage + 1}페이지` });
+      addBookmarkMutation.mutate(
+        { bookId, page: currentPage, label: `${currentPage + 1}페이지` },
+        { onSuccess: () => utils.bookmarks.list.invalidate({ bookId }) }
+      );
     }
-  };
+  }, [user, isCurrentPageBookmarked, userBookmarks, currentPage, bookId, utils]);
 
-  // 로딩 상태: 도서 정보 로딩 또는 구글 드라이브 내용 로딩
-  const contentLoading = isLoading || (!!book?.googleDriveUrl && gdriveLoading);
+  // Touch swipe
+  const minSwipeDistance = 50;
 
-  if (contentLoading) {
+  const onTouchStart = useCallback((e: React.TouchEvent) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  }, []);
+
+  const onTouchMove = useCallback((e: React.TouchEvent) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  }, []);
+
+  const onTouchEnd = useCallback(() => {
+    if (!touchStart || !touchEnd) return;
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > minSwipeDistance;
+    const isRightSwipe = distance < -minSwipeDistance;
+
+    if (isLeftSwipe) {
+      nextPage();
+    } else if (isRightSwipe) {
+      prevPage();
+    }
+  }, [touchStart, touchEnd, nextPage, prevPage]);
+
+  const onClose = useCallback(() => {
+    navigate("/");
+  }, [navigate]);
+
+  if (bookLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center">
-          <div className="animate-pulse text-muted-foreground mb-2">도서를 불러오는 중...</div>
-          {book?.googleDriveUrl && (
-            <div className="text-xs text-muted-foreground">구글 드라이브에서 내용을 가져오고 있습니다</div>
-          )}
-        </div>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#fdfbf7]">
+        <Loader2 className="w-10 h-10 animate-spin text-amber-500" />
       </div>
     );
   }
 
   if (!book) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center">
-          <p className="text-muted-foreground mb-4">도서를 찾을 수 없습니다.</p>
-          <Button onClick={() => setLocation("/")}>돌아가기</Button>
-        </div>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#fdfbf7]">
+        <p>도서를 찾을 수 없습니다.</p>
       </div>
     );
   }
-
-  if (!bookContent) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center">
-          <p className="text-muted-foreground mb-4">도서 내용이 없습니다.</p>
-          <Button onClick={() => setLocation("/")}>돌아가기</Button>
-        </div>
-      </div>
-    );
-  }
-
-  const themeStyle = THEME_STYLES[theme];
 
   return (
-    <div className={`min-h-screen flex flex-col ${themeStyle.bg} ${themeStyle.text}`}>
-      <header className="flex items-center justify-between px-4 py-3 border-b border-border/30">
-        <Button variant="ghost" size="sm" onClick={() => setLocation("/")}>
-          <ChevronLeft className="w-4 h-4 mr-1" /> 목록
-        </Button>
-        <h1 className="text-sm font-medium truncate max-w-[50%]">{book.title}</h1>
-        <div className="flex gap-1">
-          {isAuthenticated && (
-            <Button variant="ghost" size="sm" onClick={toggleBookmark} className={isBookmarked ? "text-yellow-500" : ""}>
-              <Bookmark className="w-4 h-4" fill={isBookmarked ? "currentColor" : "none"} />
-            </Button>
+    <div
+      className={`fixed inset-0 z-50 flex flex-col h-screen transition-colors duration-300 ${THEME_CLASSES[theme]}`}
+      style={{ overflow: "hidden" }}
+    >
+      {/* Header */}
+      <header
+        className={`flex justify-between items-center px-4 md:px-6 h-14 shrink-0 border-b ${
+          theme === "dark"
+            ? "border-gray-800 bg-gray-900/90"
+            : "border-gray-200 bg-white/80"
+        } backdrop-blur-md z-20`}
+      >
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-black/5 rounded-full transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+          <h1 className="text-base font-serif font-bold truncate max-w-[150px] md:max-w-md">
+            {book.title}
+          </h1>
+        </div>
+
+        <div className="flex items-center gap-1">
+          {user && (
+            <button
+              onClick={toggleBookmark}
+              className={`p-2 hover:bg-black/5 rounded-full ${
+                isCurrentPageBookmarked ? "text-amber-500" : ""
+              }`}
+            >
+              <Bookmark
+                className={`w-5 h-5 ${
+                  isCurrentPageBookmarked ? "fill-current" : ""
+                }`}
+              />
+            </button>
           )}
-          <Button variant="ghost" size="sm" onClick={() => setShowSettings(!showSettings)}>
-            <Sun className="w-4 h-4" />
-          </Button>
-          {isAuthenticated && (
-            <Button variant="ghost" size="sm" onClick={() => setShowBookmarks(!showBookmarks)}>
-              <BookOpen className="w-4 h-4" />
-            </Button>
-          )}
+          <button
+            onClick={() => setShowSettings(!showSettings)}
+            className="p-2 hover:bg-black/5 rounded-full"
+          >
+            <Settings className="w-5 h-5" />
+          </button>
         </div>
       </header>
 
-      {showSettings && (
-        <div className="px-4 py-3 border-b border-border/30 flex flex-wrap gap-4 items-center text-sm">
-          <div className="flex items-center gap-2">
-            <span>테마:</span>
-            {(Object.keys(THEME_STYLES) as Theme[]).map((t) => (
-              <Button key={t} variant={theme === t ? "default" : "outline"} size="sm" onClick={() => setTheme(t)}>
-                {THEME_STYLES[t].label}
-              </Button>
-            ))}
-          </div>
-          <div className="flex items-center gap-2">
-            <span>글자:</span>
-            <Button variant="outline" size="sm" onClick={() => setFontSize((s) => Math.max(12, s - 2))}><Minus className="w-3 h-3" /></Button>
-            <span>{fontSize}px</span>
-            <Button variant="outline" size="sm" onClick={() => setFontSize((s) => Math.min(32, s + 2))}><Plus className="w-3 h-3" /></Button>
-          </div>
-          <div className="flex items-center gap-2">
-            <span>줄간격:</span>
-            <Button variant="outline" size="sm" onClick={() => setLineHeight((l) => Math.max(1.2, +(l - 0.2).toFixed(1)))}><Minus className="w-3 h-3" /></Button>
-            <span>{lineHeight.toFixed(1)}</span>
-            <Button variant="outline" size="sm" onClick={() => setLineHeight((l) => Math.min(3.0, +(l + 0.2).toFixed(1)))}><Plus className="w-3 h-3" /></Button>
-          </div>
-        </div>
-      )}
+      {/* Settings Panel */}
+      <AnimatePresence>
+        {showSettings && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className={`absolute top-16 right-4 p-5 rounded-xl shadow-2xl border z-30 w-80 ${
+              theme === "dark"
+                ? "bg-gray-800 border-gray-700"
+                : "bg-white border-gray-100"
+            }`}
+          >
+            <div className="space-y-6">
+              {/* Theme */}
+              <div>
+                <p className="text-xs font-bold mb-3 opacity-60 uppercase tracking-wider">
+                  테마
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setTheme("light")}
+                    className={`flex-1 p-3 rounded-lg border transition-all ${
+                      theme === "light"
+                        ? "border-amber-500 bg-amber-50 ring-1 ring-amber-500"
+                        : "border-gray-200 hover:bg-gray-50"
+                    } flex flex-col items-center gap-1`}
+                  >
+                    <Sun className="w-5 h-5" />
+                    <span className="text-xs">라이트</span>
+                  </button>
+                  <button
+                    onClick={() => setTheme("sepia")}
+                    className={`flex-1 p-3 rounded-lg border transition-all ${
+                      theme === "sepia"
+                        ? "border-amber-500 bg-[#f4ecd8] ring-1 ring-amber-500"
+                        : "border-gray-200 hover:bg-gray-50"
+                    } flex flex-col items-center gap-1`}
+                  >
+                    <Coffee className="w-5 h-5" />
+                    <span className="text-xs">세피아</span>
+                  </button>
+                  <button
+                    onClick={() => setTheme("dark")}
+                    className={`flex-1 p-3 rounded-lg border transition-all ${
+                      theme === "dark"
+                        ? "border-amber-500 bg-gray-700 text-white ring-1 ring-amber-500"
+                        : "border-gray-200 hover:bg-gray-50"
+                    } flex flex-col items-center gap-1`}
+                  >
+                    <Moon className="w-5 h-5" />
+                    <span className="text-xs">다크</span>
+                  </button>
+                </div>
+              </div>
 
-      {showBookmarks && userBookmarks && userBookmarks.length > 0 && (
-        <div className="px-4 py-3 border-b border-border/30">
-          <p className="text-sm font-medium mb-2">북마크 목록</p>
-          <div className="flex flex-wrap gap-2">
-            {userBookmarks.map((bm) => (
-              <Button key={bm.id} variant="outline" size="sm" onClick={() => { setCurrentPage(bm.page); setShowBookmarks(false); }}>
-                {bm.label || `${bm.page + 1}p`}
-              </Button>
-            ))}
-          </div>
-        </div>
-      )}
+              {/* Font Size */}
+              <div>
+                <div className="flex justify-between mb-3">
+                  <p className="text-xs font-bold opacity-60 uppercase tracking-wider">
+                    글자 크기
+                  </p>
+                  <span className="text-xs font-mono bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">
+                    {fontSize}px
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg">
+                  <Type className="w-4 h-4 opacity-50" />
+                  <input
+                    type="range"
+                    min="14"
+                    max="32"
+                    step="1"
+                    value={fontSize}
+                    onChange={(e) => setFontSize(Number(e.target.value))}
+                    className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                  />
+                  <Type className="w-6 h-6 opacity-80" />
+                </div>
+              </div>
 
-      <main
-        className="flex-1 px-6 py-8 max-w-3xl mx-auto w-full select-none"
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
-        style={{ fontSize: `${fontSize}px`, lineHeight: lineHeight }}
-      >
-        <div className="whitespace-pre-wrap break-words">
-          {pages[currentPage] || ""}
+              {/* Line Height */}
+              <div>
+                <div className="flex justify-between mb-3">
+                  <p className="text-xs font-bold opacity-60 uppercase tracking-wider">
+                    줄 간격
+                  </p>
+                  <span className="text-xs font-mono bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">
+                    {lineHeight}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg">
+                  <span className="text-xs opacity-50">좁게</span>
+                  <input
+                    type="range"
+                    min="1.4"
+                    max="2.4"
+                    step="0.1"
+                    value={lineHeight}
+                    onChange={(e) => setLineHeight(Number(e.target.value))}
+                    className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                  />
+                  <span className="text-xs opacity-80">넓게</span>
+                </div>
+              </div>
+
+              {/* View Mode */}
+              <div>
+                <p className="text-xs font-bold mb-3 opacity-60 uppercase tracking-wider">
+                  보기 모드
+                </p>
+                <div className="flex gap-2 p-1 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                  <button
+                    onClick={() => setIsTwoPageMode(false)}
+                    className={`flex-1 py-2 rounded-md text-xs font-medium flex items-center justify-center gap-2 transition-all ${
+                      !isTwoPageMode
+                        ? "bg-white dark:bg-gray-600 shadow-sm text-amber-600"
+                        : "text-gray-500"
+                    }`}
+                  >
+                    <Smartphone className="w-4 h-4" />한 페이지
+                  </button>
+                  <button
+                    onClick={() => setIsTwoPageMode(true)}
+                    className={`flex-1 py-2 rounded-md text-xs font-medium flex items-center justify-center gap-2 transition-all ${
+                      isTwoPageMode
+                        ? "bg-white dark:bg-gray-600 shadow-sm text-amber-600"
+                        : "text-gray-500"
+                    }`}
+                  >
+                    <Columns className="w-4 h-4" />두 페이지
+                  </button>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Main Content Area */}
+      <main className="flex-1 relative w-full overflow-hidden flex items-center justify-center" style={{ minHeight: 0 }}>
+        {(isContentLoading || !isReady) && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-inherit">
+            <Loader2 className="w-10 h-10 animate-spin text-amber-500" />
+            <p className="font-serif">문서를 불러오는 중입니다...</p>
+          </div>
+        )}
+
+        <div
+          ref={containerRef}
+          className={`relative w-full h-full max-w-[1200px] mx-auto transition-all duration-300 ${
+            isContentLoading || !isReady ? "opacity-0" : "opacity-100"
+          }`}
+          style={{
+            paddingTop: isTwoPageMode ? "40px" : "20px",
+            paddingBottom: isTwoPageMode ? "40px" : "20px",
+          }}
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
+        >
+          {/* Viewport mask */}
+          <div
+            className="h-full overflow-hidden mx-auto"
+            style={{
+              width: dimensions.width > 0 ? `${dimensions.width}px` : "100%",
+            }}
+          >
+            {/* Sliding content track */}
+            <motion.div
+              animate={{ x: -currentPage * stride }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              className="h-full"
+              style={{
+                display: "flex",
+                width: "max-content",
+                backfaceVisibility: "hidden",
+              }}
+            >
+              {/* Content */}
+              <div
+                ref={contentRef}
+                className="font-serif text-justify select-text"
+                style={{
+                  columnWidth: `${columnDimensions.colWidth}px`,
+                  columnGap: `${GAP_SIZE}px`,
+                  columnFill: "auto",
+                  height: `${columnDimensions.colHeight}px`,
+                  width:
+                    containerWidth !== null
+                      ? `${containerWidth}px`
+                      : "max-content",
+                  fontSize: `${fontSize}px`,
+                  lineHeight: lineHeight,
+                  boxSizing: "border-box",
+                  padding: 0,
+                  margin: 0,
+                }}
+              >
+                <div className="mb-12 text-center break-inside-avoid">
+                  <h2 className="text-2xl font-bold mb-4">{book.title}</h2>
+                  <div className="w-10 h-1 bg-amber-500 mx-auto opacity-50"></div>
+                </div>
+
+                {lines.map((line, idx) => (
+                  <p key={idx} data-line-index={idx} className="mb-6 break-inside-avoid indent-1">
+                    {line}
+                  </p>
+                ))}
+
+                <div className="h-[30vh] w-full break-inside-avoid flex items-center justify-center opacity-30">
+                  <p className="text-sm font-sans">- 끝 -</p>
+                </div>
+              </div>
+            </motion.div>
+          </div>
         </div>
       </main>
 
-      <footer className="flex items-center justify-between px-4 py-3 border-t border-border/30">
-        <Button variant="ghost" size="sm" onClick={goPrev} disabled={currentPage === 0}>
-          <ArrowLeft className="w-4 h-4" />
-        </Button>
-        <div className="text-sm opacity-70">
-          {currentPage + 1} / {totalPages}
-          {isAuthenticated && totalPages > 0 && (
-            <span className="ml-2">({Math.round(((currentPage + 1) / totalPages) * 100)}%)</span>
-          )}
+      {/* Footer */}
+      <footer
+        className={`h-14 shrink-0 flex flex-col justify-center px-6 border-t ${
+          theme === "dark" ? "border-gray-800" : "border-gray-100"
+        } z-20 bg-inherit`}
+      >
+        <div className="flex justify-between items-center max-w-[1200px] mx-auto w-full">
+          <div className="flex-1 mr-8 hidden md:block">
+            <div className="w-full bg-gray-200/50 h-1 rounded-full overflow-hidden">
+              <motion.div
+                className={`h-full ${
+                  theme === "dark" ? "bg-gray-500" : "bg-gray-800"
+                }`}
+                initial={{ width: 0 }}
+                animate={{
+                  width: `${((currentPage + 1) / totalPages) * 100}%`,
+                }}
+                transition={{ duration: 0.3 }}
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-6 mx-auto md:mx-0">
+            <button
+              onClick={prevPage}
+              disabled={currentPage === 0}
+              className="group flex items-center gap-2 disabled:opacity-30 hover:text-amber-600 transition-colors"
+            >
+              <ChevronLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+              <span className="text-sm font-medium hidden sm:inline">이전</span>
+            </button>
+
+            <span className="font-mono text-sm font-medium min-w-[60px] text-center">
+              {`${currentPage + 1} / ${totalPages}`}
+            </span>
+
+            <button
+              onClick={nextPage}
+              disabled={currentPage >= totalPages - 1}
+              className="group flex items-center gap-2 disabled:opacity-30 hover:text-amber-600 transition-colors"
+            >
+              <span className="text-sm font-medium hidden sm:inline">다음</span>
+              <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+            </button>
+          </div>
         </div>
-        <Button variant="ghost" size="sm" onClick={goNext} disabled={currentPage >= totalPages - 1}>
-          <ArrowRight className="w-4 h-4" />
-        </Button>
       </footer>
     </div>
   );

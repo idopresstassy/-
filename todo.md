@@ -48,3 +48,9 @@
 - [x] 관리자 페이지에 구글 드라이브 URL 입력 필드 추가
 - [x] 이북 뷰어에서 구글 드라이브 텍스트를 fetch하여 페이지 분할 표시
 - [x] 기존 content 필드와 googleDriveUrl 병행 지원
+
+## 이북 뷰어 개선 (CSS columns 방식)
+- [x] CSS columns 기반으로 재작성 (하단 스크롤 제거, 좌우 페이지 넘김만 지원)
+- [x] PC에서 한 페이지/두 페이지 보기 모드 지원
+- [x] 스마트폰에서도 한 화면 안에 내용 고정 (overflow hidden)
+- [x] framer-motion 기반 부드러운 페이지 전환 애니메이션
