@@ -6,9 +6,9 @@ import type { TrpcContext } from "./_core/context";
 vi.mock("./db", () => ({
   getBooks: vi.fn().mockImplementation(async (filter?: { genre?: string; search?: string }) => {
     const allBooks = [
-      { id: 1, title: "홍길동전", author: "허균", genre: "classic", youtubeUrl: null, createdAt: new Date() },
-      { id: 2, title: "무정", author: "이광수", genre: "modern", youtubeUrl: "https://youtube.com/test", createdAt: new Date() },
-      { id: 3, title: "해외소설", author: "외국작가", genre: "foreign", youtubeUrl: null, createdAt: new Date() },
+      { id: 1, title: "홍길동전", author: "허균", genre: "classic", youtubeUrl: null, googleDriveUrl: null, createdAt: new Date() },
+      { id: 2, title: "무정", author: "이광수", genre: "modern", youtubeUrl: "https://youtube.com/test", googleDriveUrl: null, createdAt: new Date() },
+      { id: 3, title: "해외소설", author: "외국작가", genre: "foreign", youtubeUrl: null, googleDriveUrl: "https://docs.google.com/document/d/abc123/edit", createdAt: new Date() },
     ];
     let result = allBooks;
     if (filter?.genre) result = result.filter(b => b.genre === filter.genre);
@@ -16,7 +16,8 @@ vi.mock("./db", () => ({
     return result;
   }),
   getBookById: vi.fn().mockImplementation(async (id: number) => {
-    if (id === 1) return { id: 1, title: "홍길동전", author: "허균", genre: "classic", content: "옛날에...", youtubeUrl: null, createdAt: new Date() };
+    if (id === 1) return { id: 1, title: "홍길동전", author: "허균", genre: "classic", content: "옛날에...", youtubeUrl: null, googleDriveUrl: null, createdAt: new Date() };
+    if (id === 3) return { id: 3, title: "해외소설", author: "외국작가", genre: "foreign", content: null, youtubeUrl: null, googleDriveUrl: "https://docs.google.com/document/d/abc123/edit", createdAt: new Date() };
     return null;
   }),
   createBook: vi.fn().mockResolvedValue(3),
@@ -116,6 +117,21 @@ describe("books router", () => {
       title: "새 책", author: "작가", genre: "modern", content: "내용",
     });
     expect(result.id).toBe(3);
+  });
+
+  it("admin can create a book with googleDriveUrl", async () => {
+    const caller = appRouter.createCaller(createAdminContext());
+    const result = await caller.books.create({
+      title: "드라이브 책", author: "작가", genre: "classic",
+      googleDriveUrl: "https://docs.google.com/document/d/xyz789/edit",
+    });
+    expect(result.id).toBe(3);
+  });
+
+  it("gets a book with googleDriveUrl", async () => {
+    const caller = appRouter.createCaller(createPublicContext());
+    const book = await caller.books.getById({ id: 3 });
+    expect(book.googleDriveUrl).toBe("https://docs.google.com/document/d/abc123/edit");
   });
 
   it("non-admin cannot create a book", async () => {

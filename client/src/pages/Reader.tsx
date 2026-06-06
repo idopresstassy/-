@@ -21,6 +21,13 @@ export default function Reader() {
   const { user, isAuthenticated } = useAuth();
 
   const { data: book, isLoading } = trpc.books.getById.useQuery({ id: bookId }, { enabled: !!bookId });
+
+  // 구글 드라이브 URL이 있으면 해당 내용을 프록시로 불러옴
+  const { data: gdriveData, isLoading: gdriveLoading } = trpc.books.fetchGoogleDriveContent.useQuery(
+    { url: book?.googleDriveUrl || "" },
+    { enabled: !!book?.googleDriveUrl }
+  );
+
   const { data: progress } = trpc.progress.get.useQuery({ bookId }, { enabled: isAuthenticated && !!bookId });
   const { data: userBookmarks, refetch: refetchBookmarks } = trpc.bookmarks.list.useQuery({ bookId }, { enabled: isAuthenticated && !!bookId });
 
@@ -36,15 +43,22 @@ export default function Reader() {
   const [showBookmarks, setShowBookmarks] = useState(false);
   const [progressRestored, setProgressRestored] = useState(false);
 
+  // 콘텐츠 결정: 구글 드라이브 내용 우선, 없으면 DB content 사용
+  const bookContent = useMemo(() => {
+    if (book?.googleDriveUrl && gdriveData?.content) {
+      return gdriveData.content;
+    }
+    return book?.content || "";
+  }, [book?.googleDriveUrl, book?.content, gdriveData?.content]);
+
   const pages = useMemo(() => {
-    if (!book?.content) return [];
-    const content = book.content;
+    if (!bookContent) return [];
     const result: string[] = [];
-    for (let i = 0; i < content.length; i += CHARS_PER_PAGE) {
-      result.push(content.slice(i, i + CHARS_PER_PAGE));
+    for (let i = 0; i < bookContent.length; i += CHARS_PER_PAGE) {
+      result.push(bookContent.slice(i, i + CHARS_PER_PAGE));
     }
     return result.length > 0 ? result : [""];
-  }, [book?.content]);
+  }, [bookContent]);
 
   const totalPages = pages.length;
 
@@ -109,10 +123,18 @@ export default function Reader() {
     }
   };
 
-  if (isLoading) {
+  // 로딩 상태: 도서 정보 로딩 또는 구글 드라이브 내용 로딩
+  const contentLoading = isLoading || (!!book?.googleDriveUrl && gdriveLoading);
+
+  if (contentLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="animate-pulse text-muted-foreground">로딩 중...</div>
+        <div className="text-center">
+          <div className="animate-pulse text-muted-foreground mb-2">도서를 불러오는 중...</div>
+          {book?.googleDriveUrl && (
+            <div className="text-xs text-muted-foreground">구글 드라이브에서 내용을 가져오고 있습니다</div>
+          )}
+        </div>
       </div>
     );
   }
@@ -122,6 +144,17 @@ export default function Reader() {
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
           <p className="text-muted-foreground mb-4">도서를 찾을 수 없습니다.</p>
+          <Button onClick={() => setLocation("/")}>돌아가기</Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!bookContent) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <p className="text-muted-foreground mb-4">도서 내용이 없습니다.</p>
           <Button onClick={() => setLocation("/")}>돌아가기</Button>
         </div>
       </div>

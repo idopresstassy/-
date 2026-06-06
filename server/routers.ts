@@ -41,8 +41,9 @@ export const appRouter = router({
         title: z.string().min(1),
         author: z.string().min(1),
         genre: z.enum(["classic", "modern", "foreign"]),
-        content: z.string().min(1),
+        content: z.string().optional(),
         youtubeUrl: z.string().optional(),
+        googleDriveUrl: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
         const id = await db.createBook(input);
@@ -55,13 +56,34 @@ export const appRouter = router({
         title: z.string().min(1).optional(),
         author: z.string().min(1).optional(),
         genre: z.enum(["classic", "modern", "foreign"]).optional(),
-        content: z.string().min(1).optional(),
+        content: z.string().optional(),
         youtubeUrl: z.string().optional(),
+        googleDriveUrl: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
         const { id, ...data } = input;
         await db.updateBook(id, data);
         return { success: true };
+      }),
+
+    // 구글 드라이브 문서 텍스트를 프록시로 가져오는 API
+    fetchGoogleDriveContent: publicProcedure
+      .input(z.object({ url: z.string() }))
+      .query(async ({ input }) => {
+        try {
+          // Google Docs URL에서 document ID 추출
+          const match = input.url.match(/\/document\/d\/([a-zA-Z0-9_-]+)/);
+          if (!match) throw new TRPCError({ code: "BAD_REQUEST", message: "유효하지 않은 구글 드라이브 URL입니다." });
+          const docId = match[1];
+          const exportUrl = `https://docs.google.com/document/d/${docId}/export?format=txt`;
+          const response = await fetch(exportUrl);
+          if (!response.ok) throw new TRPCError({ code: "NOT_FOUND", message: "문서를 불러올 수 없습니다." });
+          const text = await response.text();
+          return { content: text };
+        } catch (e: any) {
+          if (e instanceof TRPCError) throw e;
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "문서를 불러오는 중 오류가 발생했습니다." });
+        }
       }),
 
     delete: adminProcedure

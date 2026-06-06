@@ -27,7 +27,7 @@ export default function Admin() {
   const updateDonation = trpc.donation.update.useMutation({ onSuccess: () => utils.donation.get.invalidate() });
 
   const [editingBook, setEditingBook] = useState<number | null>(null);
-  const [bookForm, setBookForm] = useState({ title: "", author: "", genre: "classic" as "classic" | "modern" | "foreign", content: "", youtubeUrl: "" });
+  const [bookForm, setBookForm] = useState({ title: "", author: "", genre: "classic" as "classic" | "modern" | "foreign", content: "", youtubeUrl: "", googleDriveUrl: "" });
   const [showAddBook, setShowAddBook] = useState(false);
   const [donationForm, setDonationForm] = useState<Record<string, string>>({});
   const [editingDonation, setEditingDonation] = useState(false);
@@ -59,7 +59,7 @@ export default function Admin() {
     );
   }
 
-  const startEditBook = async (book: { id: number; title: string; author: string; genre: string; youtubeUrl?: string | null }) => {
+  const startEditBook = async (book: { id: number; title: string; author: string; genre: string; youtubeUrl?: string | null; googleDriveUrl?: string | null }) => {
     setEditingBook(book.id);
     setBookForm({
       title: book.title,
@@ -67,11 +67,11 @@ export default function Admin() {
       genre: book.genre as "classic" | "modern" | "foreign",
       content: "로딩 중...",
       youtubeUrl: book.youtubeUrl || "",
+      googleDriveUrl: book.googleDriveUrl || "",
     });
-    // Fetch full book content from API
     try {
       const fullBook = await utils.books.getById.fetch({ id: book.id });
-      setBookForm(prev => ({ ...prev, content: fullBook.content || "" }));
+      setBookForm(prev => ({ ...prev, content: fullBook.content || "", googleDriveUrl: fullBook.googleDriveUrl || "" }));
     } catch {
       setBookForm(prev => ({ ...prev, content: "" }));
     }
@@ -82,15 +82,24 @@ export default function Admin() {
     const data: Record<string, string> = { title: bookForm.title, author: bookForm.author, genre: bookForm.genre };
     if (bookForm.youtubeUrl) data.youtubeUrl = bookForm.youtubeUrl;
     if (bookForm.content) data.content = bookForm.content;
+    if (bookForm.googleDriveUrl) data.googleDriveUrl = bookForm.googleDriveUrl;
     await updateBook.mutateAsync({ id: editingBook, ...data } as any);
     setEditingBook(null);
   };
 
   const handleAddBook = async () => {
-    if (!bookForm.title || !bookForm.author || !bookForm.content) return;
-    await createBook.mutateAsync(bookForm);
+    if (!bookForm.title || !bookForm.author) return;
+    if (!bookForm.content && !bookForm.googleDriveUrl) {
+      alert("본문 내용 또는 구글 드라이브 URL 중 하나는 입력해야 합니다.");
+      return;
+    }
+    const payload: any = { title: bookForm.title, author: bookForm.author, genre: bookForm.genre };
+    if (bookForm.content) payload.content = bookForm.content;
+    if (bookForm.youtubeUrl) payload.youtubeUrl = bookForm.youtubeUrl;
+    if (bookForm.googleDriveUrl) payload.googleDriveUrl = bookForm.googleDriveUrl;
+    await createBook.mutateAsync(payload);
     setShowAddBook(false);
-    setBookForm({ title: "", author: "", genre: "classic", content: "", youtubeUrl: "" });
+    setBookForm({ title: "", author: "", genre: "classic", content: "", youtubeUrl: "", googleDriveUrl: "" });
   };
 
   const handleDeleteBook = async (id: number) => {
@@ -196,7 +205,7 @@ export default function Admin() {
         <section className="border border-border rounded-lg p-6 bg-card">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold">도서 관리</h2>
-            <Button size="sm" onClick={() => { setShowAddBook(true); setBookForm({ title: "", author: "", genre: "classic", content: "", youtubeUrl: "" }); }}>
+            <Button size="sm" onClick={() => { setShowAddBook(true); setBookForm({ title: "", author: "", genre: "classic", content: "", youtubeUrl: "", googleDriveUrl: "" }); }}>
               <Plus className="w-4 h-4 mr-1" /> 도서 추가
             </Button>
           </div>
@@ -216,9 +225,15 @@ export default function Admin() {
                 </select>
                 <Input placeholder="YouTube URL (선택)" value={bookForm.youtubeUrl} onChange={(e) => setBookForm({ ...bookForm, youtubeUrl: e.target.value })} />
               </div>
+              <Input
+                placeholder="구글 드라이브 문서 URL (선택 — 이북 뷰어에서 내용을 불러옵니다)"
+                value={bookForm.googleDriveUrl}
+                onChange={(e) => setBookForm({ ...bookForm, googleDriveUrl: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground">구글 드라이브 URL을 입력하면 이북 뷰어에서 해당 문서의 내용을 자동으로 불러옵니다. 본문 직접 입력과 병행 가능합니다.</p>
               <textarea
                 className="w-full border border-input rounded px-3 py-2 text-sm bg-background resize-y min-h-[120px]"
-                placeholder="본문 내용"
+                placeholder="본문 내용 (구글 드라이브 URL을 입력한 경우 비워둘 수 있습니다)"
                 value={bookForm.content}
                 onChange={(e) => setBookForm({ ...bookForm, content: e.target.value })}
               />
@@ -253,6 +268,11 @@ export default function Admin() {
                         </select>
                         <Input placeholder="YouTube URL" value={bookForm.youtubeUrl} onChange={(e) => setBookForm({ ...bookForm, youtubeUrl: e.target.value })} />
                       </div>
+                      <Input
+                        placeholder="구글 드라이브 문서 URL"
+                        value={bookForm.googleDriveUrl}
+                        onChange={(e) => setBookForm({ ...bookForm, googleDriveUrl: e.target.value })}
+                      />
                       <textarea
                         className="w-full border border-input rounded px-3 py-2 text-sm bg-background resize-y min-h-[80px]"
                         placeholder="본문 수정 (비워두면 기존 내용 유지)"
@@ -276,6 +296,9 @@ export default function Admin() {
                         </span>
                         <span className="font-medium">{book.title}</span>
                         <span className="text-muted-foreground ml-2">— {book.author}</span>
+                        {book.googleDriveUrl && (
+                          <span className="ml-2 text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-700">Google Drive 연결</span>
+                        )}
                       </div>
                       <div className="flex gap-1">
                         <Button variant="ghost" size="sm" onClick={() => startEditBook(book)}>

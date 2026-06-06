@@ -20,8 +20,9 @@ export const books = mysqlTable("books", {
   title: varchar("title", { length: 500 }).notNull(),
   author: varchar("author", { length: 200 }).notNull(),
   genre: mysqlEnum("genre", ["classic", "modern", "foreign"]).notNull(),
-  content: text("content").notNull(),
+  content: text("content"),
   youtubeUrl: varchar("youtubeUrl", { length: 500 }),
+  googleDriveUrl: varchar("googleDriveUrl", { length: 1000 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

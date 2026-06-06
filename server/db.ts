@@ -62,6 +62,7 @@ export async function getBooks(filter?: { genre?: "classic" | "modern" | "foreig
     author: books.author,
     genre: books.genre,
     youtubeUrl: books.youtubeUrl,
+    googleDriveUrl: books.googleDriveUrl,
     createdAt: books.createdAt,
   }).from(books).$dynamic();
 
@@ -86,14 +87,14 @@ export async function getBookById(id: number) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-export async function createBook(data: { title: string; author: string; genre: "classic" | "modern" | "foreign"; content: string; youtubeUrl?: string }) {
+export async function createBook(data: { title: string; author: string; genre: "classic" | "modern" | "foreign"; content?: string; youtubeUrl?: string; googleDriveUrl?: string }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const result = await db.insert(books).values(data).$returningId();
   return result[0].id;
 }
 
-export async function updateBook(id: number, data: Partial<{ title: string; author: string; genre: "classic" | "modern" | "foreign"; content: string; youtubeUrl: string }>) {
+export async function updateBook(id: number, data: Partial<{ title: string; author: string; genre: "classic" | "modern" | "foreign"; content: string; youtubeUrl: string; googleDriveUrl: string }>) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db.update(books).set(data).where(eq(books.id, id));
