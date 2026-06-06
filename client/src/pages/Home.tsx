@@ -42,13 +42,6 @@ export default function Home() {
             <Button variant="ghost" size="sm" onClick={() => setShowDonation(true)}>
               <Heart className="w-4 h-4 mr-1" /> 후원
             </Button>
-            {isAuthenticated && user?.role === "admin" && (
-              <Link href="/admin">
-                <Button variant="ghost" size="sm">
-                  <Settings className="w-4 h-4 mr-1" /> 관리
-                </Button>
-              </Link>
-            )}
             {isAuthenticated ? (
               <Button variant="ghost" size="sm" onClick={() => logout()}>
                 <LogOut className="w-4 h-4 mr-1" /> 로그아웃
@@ -59,6 +52,13 @@ export default function Home() {
                   <LogIn className="w-4 h-4 mr-1" /> 로그인
                 </Button>
               </a>
+            )}
+            {isAuthenticated && user?.role === "admin" && (
+              <Link href="/admin">
+                <Button variant="ghost" size="sm">
+                  <Settings className="w-4 h-4 mr-1" /> 관리
+                </Button>
+              </Link>
             )}
           </div>
         </div>
