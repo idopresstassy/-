@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useState, useEffect } from "react";
 import { Book } from "@/lib/books";
 import { useBooks } from "@/lib/useBooks";
+import { useDonation } from "@/lib/useDonation";
 import BookReader from "@/components/BookReader";
 import { useAuth } from "@/lib/AuthContext";
 import AuthModal from "@/components/AuthModal";
@@ -29,6 +30,7 @@ export default function Home() {
   const [showDonationModal, setShowDonationModal] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const { books, isLoaded } = useBooks();
+  const { donation, isLoaded: donationLoaded } = useDonation();
   const { user, isAdmin, signOut } = useAuth();
 
   useEffect(() => {
@@ -214,8 +216,8 @@ export default function Home() {
       {/* Auth Modal */}
       {showAuthModal && <AuthModal onClose={() => setShowAuthModal(false)} />}
 
-      {/* 후원 안내 모달 */}
-      {showDonationModal && (
+      {/* 후원 안내 모달 - DB에서 동적으로 로드 */}
+      {showDonationModal && donationLoaded && (
         <div
           className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
           onClick={() => setShowDonationModal(false)}
@@ -237,29 +239,22 @@ export default function Home() {
             </div>
 
             <div className="px-6 py-5 space-y-4 text-gray-700 text-sm leading-relaxed">
-              <p>
-                무료로 제공되는 이 문학도서관은 개인의 노력으로 운영되고
-                있습니다.
-              </p>
-              <p>
-                서버 유지비와 자료 정리를 위한 후원은 자발적으로만 받고 있으며,
-                후원금은 사이트 운영 및 한국문학 자료 보존에 사용됩니다.
-              </p>
-              <p className="text-amber-600 font-medium">
-                *후원은 자율적이며, 어떠한 대가나 특별 서비스가 제공되지
-                않습니다.
-              </p>
+              {donation.description.split('\n').map((paragraph, idx) => (
+                <p key={idx} className={paragraph.startsWith('*') ? 'text-amber-600 font-medium' : ''}>
+                  {paragraph}
+                </p>
+              ))}
 
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mt-4">
                 <h3 className="font-bold text-gray-900 mb-3">후원 방법</h3>
                 <div className="space-y-1">
                   <p>
-                    <span className="text-gray-500">카카오뱅크</span>{" "}
-                    <span className="font-mono font-bold">3333-29-8406357</span>
+                    <span className="text-gray-500">{donation.bank_name}</span>{" "}
+                    <span className="font-mono font-bold">{donation.account_number}</span>
                   </p>
                   <p>
                     <span className="text-gray-500">예금주</span>{" "}
-                    <span className="font-bold">홍기환</span>
+                    <span className="font-bold">{donation.account_holder}</span>
                   </p>
                 </div>
               </div>
@@ -267,24 +262,22 @@ export default function Home() {
               <p className="text-gray-500">
                 문의:{" "}
                 <a
-                  href="mailto:tassy@naver.com"
+                  href={`mailto:${donation.contact_email}`}
                   className="text-amber-600 hover:underline"
                 >
-                  tassy@naver.com
+                  {donation.contact_email}
                 </a>
               </p>
 
-              <p className="pt-2">
-                감사합니다.
-                <br />
-                여러분의 관심이 한국문학의 지속적인 보존과 확산에 큰 힘이
-                됩니다.
-              </p>
-              <p className="font-medium text-gray-900">이도출판 대표 홍기환</p>
+              {donation.closing_message.split('\n').map((line, idx) => (
+                <p key={idx} className={idx === 0 ? 'pt-2' : ''}>
+                  {line}
+                </p>
+              ))}
+              <p className="font-medium text-gray-900">{donation.representative}</p>
 
               <div className="bg-gray-100 rounded-lg p-3 text-xs text-gray-500 mt-4">
-                ※ 본 페이지의 후원금은 「기부금품법」상의 법정 기부금이 아닌,
-                운영자 개인에 대한 자발적 후원금으로 세제공제 대상이 아닙니다.
+                {donation.legal_notice}
               </div>
             </div>
           </div>

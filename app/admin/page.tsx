@@ -3,18 +3,25 @@
 import { useState } from 'react';
 import { Book } from '@/lib/books';
 import { useBooks } from '@/lib/useBooks';
+import { useDonation, DonationInfo } from '@/lib/useDonation';
 import { useAuth } from '@/lib/AuthContext';
-import { Save, Plus, Trash2, Loader2, Youtube, ArrowLeft, ShieldX } from 'lucide-react';
+import { Save, Plus, Trash2, Loader2, Youtube, ArrowLeft, ShieldX, Heart } from 'lucide-react';
 import Link from 'next/link';
 
 const GENRES = ['고전', '현대', '해외'] as const;
 
 export default function AdminPage() {
   const { books, isLoaded, saveBook, deleteBook } = useBooks();
+  const { donation, isLoaded: donationLoaded, saveDonation } = useDonation();
   const { user, isAdmin, isLoading: authLoading } = useAuth();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<Book>>({});
   const [saving, setSaving] = useState(false);
+
+  // 후원 정보 편집 상태
+  const [editingDonation, setEditingDonation] = useState(false);
+  const [donationForm, setDonationForm] = useState<DonationInfo>(donation);
+  const [savingDonation, setSavingDonation] = useState(false);
 
   const handleEdit = (book: Book) => {
     setEditingId(book.id);
@@ -64,7 +71,25 @@ export default function AdminPage() {
     }
   };
 
-  if (authLoading || !isLoaded) {
+  const handleEditDonation = () => {
+    setDonationForm(donation);
+    setEditingDonation(true);
+  };
+
+  const handleSaveDonation = async () => {
+    setSavingDonation(true);
+    try {
+      await saveDonation(donationForm);
+      setEditingDonation(false);
+    } catch (e) {
+      console.error(e);
+      alert('후원 정보 저장에 실패했습니다. 관리자 권한을 확인해주세요.');
+    } finally {
+      setSavingDonation(false);
+    }
+  };
+
+  if (authLoading || !isLoaded || !donationLoaded) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
@@ -105,6 +130,166 @@ export default function AdminPage() {
           </button>
         </header>
 
+        {/* 후원 정보 관리 섹션 */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
+          <div className="bg-amber-50 border-b border-amber-100 px-6 py-4 flex justify-between items-center">
+            <div className="flex items-center gap-2">
+              <Heart className="w-5 h-5 text-amber-600" />
+              <h2 className="text-lg font-bold text-gray-900">후원 안내 관리</h2>
+            </div>
+            {!editingDonation && (
+              <button
+                onClick={handleEditDonation}
+                className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-white text-sm font-medium transition-colors"
+              >
+                수정
+              </button>
+            )}
+          </div>
+
+          <div className="p-6">
+            {editingDonation ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">은행명</label>
+                    <input
+                      type="text"
+                      value={donationForm.bank_name}
+                      onChange={(e) => setDonationForm({ ...donationForm, bank_name: e.target.value })}
+                      className="w-full p-2.5 border border-gray-200 rounded-lg text-sm"
+                      placeholder="카카오뱅크"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">계좌번호</label>
+                    <input
+                      type="text"
+                      value={donationForm.account_number}
+                      onChange={(e) => setDonationForm({ ...donationForm, account_number: e.target.value })}
+                      className="w-full p-2.5 border border-gray-200 rounded-lg text-sm font-mono"
+                      placeholder="3333-29-8406357"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">예금주</label>
+                    <input
+                      type="text"
+                      value={donationForm.account_holder}
+                      onChange={(e) => setDonationForm({ ...donationForm, account_holder: e.target.value })}
+                      className="w-full p-2.5 border border-gray-200 rounded-lg text-sm"
+                      placeholder="홍기환"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">후원 안내 문구</label>
+                  <textarea
+                    value={donationForm.description}
+                    onChange={(e) => setDonationForm({ ...donationForm, description: e.target.value })}
+                    className="w-full p-2.5 border border-gray-200 rounded-lg text-sm"
+                    rows={4}
+                    placeholder="후원 안내 설명을 입력하세요. 줄바꿈으로 문단을 구분합니다."
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">문의 이메일</label>
+                    <input
+                      type="email"
+                      value={donationForm.contact_email}
+                      onChange={(e) => setDonationForm({ ...donationForm, contact_email: e.target.value })}
+                      className="w-full p-2.5 border border-gray-200 rounded-lg text-sm"
+                      placeholder="tassy@naver.com"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">대표자 정보</label>
+                    <input
+                      type="text"
+                      value={donationForm.representative}
+                      onChange={(e) => setDonationForm({ ...donationForm, representative: e.target.value })}
+                      className="w-full p-2.5 border border-gray-200 rounded-lg text-sm"
+                      placeholder="이도출판 대표 홍기환"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">마무리 인사말</label>
+                  <textarea
+                    value={donationForm.closing_message}
+                    onChange={(e) => setDonationForm({ ...donationForm, closing_message: e.target.value })}
+                    className="w-full p-2.5 border border-gray-200 rounded-lg text-sm"
+                    rows={3}
+                    placeholder="감사합니다. 줄바꿈으로 문단을 구분합니다."
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">법적 고지</label>
+                  <textarea
+                    value={donationForm.legal_notice}
+                    onChange={(e) => setDonationForm({ ...donationForm, legal_notice: e.target.value })}
+                    className="w-full p-2.5 border border-gray-200 rounded-lg text-sm"
+                    rows={2}
+                    placeholder="법적 고지 문구를 입력하세요."
+                  />
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    onClick={handleSaveDonation}
+                    disabled={savingDonation}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium disabled:opacity-50"
+                  >
+                    <Save className="w-4 h-4" />
+                    {savingDonation ? '저장 중...' : '저장'}
+                  </button>
+                  <button
+                    onClick={() => setEditingDonation(false)}
+                    className="px-5 py-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors"
+                  >
+                    취소
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3 text-sm">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <span className="text-gray-500">은행명:</span>{' '}
+                    <span className="font-medium">{donation.bank_name}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">계좌번호:</span>{' '}
+                    <span className="font-mono font-medium">{donation.account_number}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">예금주:</span>{' '}
+                    <span className="font-medium">{donation.account_holder}</span>
+                  </div>
+                </div>
+                <div>
+                  <span className="text-gray-500">안내 문구:</span>{' '}
+                  <span className="text-gray-700">{donation.description.substring(0, 80)}...</span>
+                </div>
+                <div>
+                  <span className="text-gray-500">문의:</span>{' '}
+                  <span className="text-gray-700">{donation.contact_email}</span>
+                </div>
+                <div>
+                  <span className="text-gray-500">대표자:</span>{' '}
+                  <span className="text-gray-700">{donation.representative}</span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 도서 관리 테이블 */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <table className="w-full text-left">
             <thead className="bg-gray-50 border-b border-gray-200">
