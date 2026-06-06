@@ -71,24 +71,20 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Hero */}
-      <section className="py-12 bg-gradient-to-b from-secondary/50 to-background">
-        <div className="container text-center">
-          <h2 className="text-3xl font-bold font-serif text-foreground mb-2">아름다운 한국 문학을 만나보세요</h2>
-          <p className="text-muted-foreground mb-6">고전부터 현대까지, 다양한 문학 작품을 무료로 읽어보세요.</p>
-          <form onSubmit={handleSearch} className="max-w-md mx-auto flex gap-2">
-            <Input
-              placeholder="제목 또는 작가명으로 검색..."
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              className="flex-1"
-            />
-            <Button type="submit" size="sm">
-              <Search className="w-4 h-4" />
-            </Button>
-          </form>
-        </div>
-      </section>
+      {/* Search */}
+      <div className="container pt-4 pb-2">
+        <form onSubmit={handleSearch} className="flex gap-2">
+          <Input
+            placeholder="제목 또는 작가명으로 검색..."
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            className="flex-1"
+          />
+          <Button type="submit" size="sm">
+            <Search className="w-4 h-4" />
+          </Button>
+        </form>
+      </div>
 
       {/* Genre Filter */}
       <section className="container py-6">
