@@ -125,10 +125,8 @@ export default function Home() {
                 </div>
                 <h3 className="text-lg font-semibold text-foreground mb-1 font-serif">{book.title}</h3>
                 <p className="text-sm text-muted-foreground mb-4">{book.author}</p>
-                <Link href={`/read/${book.id}`}>
-                  <Button variant="outline" size="sm" className="w-full">
-                    <BookOpen className="w-4 h-4 mr-1" /> 읽기
-                  </Button>
+                <Link href={`/read/${book.id}`} className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium transition-all disabled:pointer-events-none disabled:opacity-50 border bg-transparent shadow-xs hover:bg-accent hover:text-accent-foreground h-8 rounded-md px-3 text-xs w-full">
+                    <BookOpen className="w-4 h-4" /> 읽기
                 </Link>
               </div>
             ))}
