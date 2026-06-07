@@ -5,7 +5,7 @@ import { trpc } from "@/lib/trpc";
 import { getLoginUrl } from "@/const";
 import { useState, useCallback } from "react";
 import { Link } from "wouter";
-import { BookOpen, Heart, Search, Youtube, LogIn, LogOut, Settings } from "lucide-react";
+import { BookOpen, Heart, Search, Youtube, LogIn, LogOut, Settings, List, X } from "lucide-react";
 
 const GENRES = [
   { value: undefined, label: "전체" },
@@ -27,6 +27,10 @@ export default function Home() {
   const [searchInput, setSearchInput] = useState("");
   const [showDonation, setShowDonation] = useState(false);
   const [showInAppAlert, setShowInAppAlert] = useState(false);
+  const [showBookList, setShowBookList] = useState(false);
+
+  // 전체목록용 데이터 (필터 없이 전체)
+  const { data: allBooks } = trpc.books.list.useQuery({});
 
   const { data: books, isLoading } = trpc.books.list.useQuery({ genre, search: search || undefined });
   const { data: donation } = trpc.donation.get.useQuery();
@@ -84,17 +88,22 @@ export default function Home() {
 
       {/* Search */}
       <div className="container pt-4 pb-2">
-        <form onSubmit={handleSearch} className="flex gap-2">
-          <Input
-            placeholder="제목 또는 작가명으로 검색..."
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            className="flex-1"
-          />
-          <Button type="submit" size="sm">
-            <Search className="w-4 h-4" />
+        <div className="flex gap-2 items-center">
+          <form onSubmit={handleSearch} className="flex gap-2 flex-1">
+            <Input
+              placeholder="제목 또는 작가명으로 검색..."
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              className="flex-1"
+            />
+            <Button type="submit" size="sm">
+              <Search className="w-4 h-4" />
+            </Button>
+          </form>
+          <Button variant="outline" size="sm" onClick={() => setShowBookList(true)}>
+            <List className="w-4 h-4 mr-1" /> 전체목록
           </Button>
-        </form>
+        </div>
       </div>
 
       {/* Genre Filter */}
@@ -182,6 +191,39 @@ export default function Home() {
             <Button variant="outline" className="w-full mt-4" onClick={() => setShowDonation(false)}>
               닫기
             </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Book List Modal */}
+      {showBookList && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50" onClick={() => setShowBookList(false)}>
+          <div className="bg-card rounded-lg shadow-xl w-full max-w-lg mx-4 max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b border-border">
+              <h3 className="text-lg font-bold font-serif text-foreground">전체 목록</h3>
+              <button onClick={() => setShowBookList(false)} className="p-1 hover:bg-secondary rounded">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="overflow-y-auto p-2">
+              {allBooks && allBooks.length > 0 ? (
+                <div className="grid grid-cols-1 gap-1">
+                  {allBooks.map((book) => (
+                    <Link
+                      key={book.id}
+                      href={`/read/${book.id}`}
+                      className="flex items-center justify-between p-3 rounded-lg hover:bg-secondary/50 transition-colors"
+                      onClick={() => setShowBookList(false)}
+                    >
+                      <span className="font-medium text-foreground text-sm">{book.title}</span>
+                      <span className="text-xs text-muted-foreground ml-2 shrink-0">{book.author}</span>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-center py-8 text-muted-foreground">등록된 도서가 없습니다.</p>
+              )}
+            </div>
           </div>
         </div>
       )}
