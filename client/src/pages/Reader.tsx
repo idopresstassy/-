@@ -22,7 +22,10 @@ import {
   Columns,
   Smartphone,
   ArrowLeft,
+  Download,
+  Check,
 } from "lucide-react";
+import { useOfflineCache } from "@/hooks/useOfflineCache";
 
 type Theme = "light" | "dark" | "sepia";
 
@@ -68,12 +71,15 @@ export default function Reader() {
   const removeBookmarkMutation = trpc.bookmarks.remove.useMutation();
   const utils = trpc.useUtils();
 
-  // Determine content
+  // Determine content (offline fallback handled below after useOfflineCache)
+  const [offlineBook, setOfflineBook] = useState<{ content: string; title: string; author: string } | null>(null);
+
   const content = useMemo(() => {
     if (gdriveData?.content) return gdriveData.content;
     if (book?.content) return book.content;
+    if (offlineBook?.content) return offlineBook.content;
     return "";
-  }, [gdriveData, book]);
+  }, [gdriveData, book, offlineBook]);
 
   const lines = useMemo(
     () => content.split("\n").filter((l) => l.trim()),
@@ -102,7 +108,68 @@ export default function Reader() {
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
 
+  // Offline cache
+  const { cacheBook, isBookCached, removeCachedBook, getCachedBook } = useOfflineCache();
+
+  // Try loading from offline cache if network fails
+  useEffect(() => {
+    if (bookId > 0 && !bookLoading && !book && !gdriveData) {
+      getCachedBook(bookId).then((cached) => {
+        if (cached) {
+          setOfflineBook({ content: cached.content, title: cached.title, author: cached.author });
+        }
+      });
+    }
+  }, [bookId, bookLoading, book, gdriveData, getCachedBook]);
+  const [isCached, setIsCached] = useState(false);
+  const [isCaching, setIsCaching] = useState(false);
+
   const GAP_SIZE = 40;
+
+  // Check if book is cached offline
+  useEffect(() => {
+    if (bookId > 0) {
+      isBookCached(bookId).then(setIsCached);
+    }
+  }, [bookId, isBookCached]);
+
+  const addToShelfMutation = trpc.bookshelf.add.useMutation();
+  const removeFromShelfMutation = trpc.bookshelf.remove.useMutation();
+
+  const handleOfflineSave = async () => {
+    if ((!book && !offlineBook) || !content) return;
+    setIsCaching(true);
+    try {
+      const title = book?.title || offlineBook?.title || "";
+      const author = book?.author || offlineBook?.author || "";
+      await cacheBook(bookId, content, title, author);
+      // Also add to server bookshelf if logged in
+      if (user) {
+        try {
+          await addToShelfMutation.mutateAsync({ bookId });
+        } catch (e) {
+          // Server save is optional, don't block offline save
+        }
+      }
+      setIsCached(true);
+    } catch (e) {
+      console.error("Failed to cache book:", e);
+    }
+    setIsCaching(false);
+  };
+
+  const handleOfflineRemove = async () => {
+    setIsCaching(true);
+    await removeCachedBook(bookId);
+    // Also remove from server bookshelf if logged in
+    if (user) {
+      try {
+        await removeFromShelfMutation.mutateAsync({ bookId });
+      } catch (e) {}
+    }
+    setIsCached(false);
+    setIsCaching(false);
+  };
 
   // Content is still loading from server
   const isContentLoading =
@@ -369,7 +436,7 @@ export default function Reader() {
     );
   }
 
-  if (!book) {
+  if (!book && !offlineBook) {
     return (
       <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#fdfbf7] gap-4">
         <p className="text-lg">도서를 찾을 수 없습니다.</p>
@@ -383,6 +450,8 @@ export default function Reader() {
       </div>
     );
   }
+
+  const displayTitle = book?.title || offlineBook?.title || "";
 
   return (
     <div
@@ -404,7 +473,7 @@ export default function Reader() {
             <ArrowLeft className="w-5 h-5" />
           </button>
           <h1 className="text-base font-serif font-bold truncate max-w-[150px] md:max-w-md">
-            {book.title}
+            {displayTitle}
           </h1>
         </div>
 
@@ -423,6 +492,22 @@ export default function Reader() {
               />
             </button>
           )}
+          <button
+            onClick={isCached ? handleOfflineRemove : handleOfflineSave}
+            disabled={isCaching || !content}
+            className={`p-2 hover:bg-black/5 rounded-full transition-colors ${
+              isCached ? "text-green-600" : ""
+            }`}
+            title={isCached ? "오프라인 저장됨 (클릭하여 삭제)" : "오프라인 저장"}
+          >
+            {isCaching ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : isCached ? (
+              <Check className="w-5 h-5" />
+            ) : (
+              <Download className="w-5 h-5" />
+            )}
+          </button>
           <button
             onClick={() => setShowSettings(!showSettings)}
             className="p-2 hover:bg-black/5 rounded-full"
@@ -632,7 +717,7 @@ export default function Reader() {
                 }}
               >
                 <div className="mb-12 text-center break-inside-avoid">
-                  <h2 className="text-2xl font-bold mb-4">{book.title}</h2>
+                  <h2 className="text-2xl font-bold mb-4">{displayTitle}</h2>
                   <div className="w-10 h-1 bg-amber-500 mx-auto opacity-50"></div>
                 </div>
 

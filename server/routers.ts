@@ -162,6 +162,33 @@ export const appRouter = router({
         return { success: true };
       }),
   }),
+
+  bookshelf: router({
+    list: protectedProcedure
+      .query(async ({ ctx }) => {
+        return await db.getBookshelfByUser(ctx.user.id);
+      }),
+
+    add: protectedProcedure
+      .input(z.object({ bookId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const id = await db.addToBookshelf(ctx.user.id, input.bookId);
+        return { id };
+      }),
+
+    remove: protectedProcedure
+      .input(z.object({ bookId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        await db.removeFromBookshelf(ctx.user.id, input.bookId);
+        return { success: true };
+      }),
+
+    isInShelf: protectedProcedure
+      .input(z.object({ bookId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        return await db.isInBookshelf(ctx.user.id, input.bookId);
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

@@ -67,3 +67,12 @@ export const readingProgress = mysqlTable("reading_progress", {
 });
 
 export type ReadingProgress = typeof readingProgress.$inferSelect;
+
+export const bookshelf = mysqlTable("bookshelf", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  bookId: int("bookId").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type BookshelfItem = typeof bookshelf.$inferSelect;

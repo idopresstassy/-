@@ -5,7 +5,7 @@ import { trpc } from "@/lib/trpc";
 import { getLoginUrl } from "@/const";
 import { useState, useCallback } from "react";
 import { Link } from "wouter";
-import { BookOpen, Heart, Search, Youtube, LogIn, LogOut, Settings, List, X } from "lucide-react";
+import { BookOpen, Heart, Search, Youtube, LogIn, LogOut, Settings, List, X, Library } from "lucide-react";
 
 const GENRES = [
   { value: undefined, label: "전체" },
@@ -50,6 +50,11 @@ export default function Home() {
             <h1 className="text-xl font-bold text-foreground font-serif">문학도서관</h1>
           </Link>
           <div className="flex items-center gap-3">
+            <Link href="/bookshelf">
+              <Button variant="ghost" size="sm">
+                <Library className="w-4 h-4 mr-1" /> 내 책장
+              </Button>
+            </Link>
             <Button variant="ghost" size="sm" onClick={() => setShowDonation(true)}>
               <Heart className="w-4 h-4 mr-1" /> 후원
             </Button>

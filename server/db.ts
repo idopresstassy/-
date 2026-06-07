@@ -1,6 +1,6 @@
 import { eq, and, like, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, books, donationInfo, bookmarks, readingProgress } from "../drizzle/schema";
+import { InsertUser, users, books, donationInfo, bookmarks, readingProgress, bookshelf } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -166,4 +166,47 @@ export async function upsertReadingProgress(data: { userId: number; bookId: numb
   } else {
     await db.insert(readingProgress).values(data);
   }
+}
+
+// ==================== BOOKSHELF (내 책장) ====================
+export async function getBookshelfByUser(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const items = await db.select({
+    id: bookshelf.id,
+    bookId: bookshelf.bookId,
+    createdAt: bookshelf.createdAt,
+    title: books.title,
+    author: books.author,
+    genre: books.genre,
+  }).from(bookshelf)
+    .innerJoin(books, eq(bookshelf.bookId, books.id))
+    .where(eq(bookshelf.userId, userId))
+    .orderBy(bookshelf.createdAt);
+  return items;
+}
+
+export async function addToBookshelf(userId: number, bookId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  // Check if already exists
+  const existing = await db.select({ id: bookshelf.id }).from(bookshelf)
+    .where(and(eq(bookshelf.userId, userId), eq(bookshelf.bookId, bookId))).limit(1);
+  if (existing.length > 0) return existing[0].id;
+  const result = await db.insert(bookshelf).values({ userId, bookId }).$returningId();
+  return result[0].id;
+}
+
+export async function removeFromBookshelf(userId: number, bookId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(bookshelf).where(and(eq(bookshelf.userId, userId), eq(bookshelf.bookId, bookId)));
+}
+
+export async function isInBookshelf(userId: number, bookId: number) {
+  const db = await getDb();
+  if (!db) return false;
+  const result = await db.select({ id: bookshelf.id }).from(bookshelf)
+    .where(and(eq(bookshelf.userId, userId), eq(bookshelf.bookId, bookId))).limit(1);
+  return result.length > 0;
 }

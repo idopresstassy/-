@@ -7,6 +7,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import Reader from "./pages/Reader";
 import Admin from "./pages/Admin";
+import Bookshelf from "./pages/Bookshelf";
 
 function Router() {
   return (
@@ -14,6 +15,7 @@ function Router() {
       <Route path={"/"} component={Home} />
       <Route path={"/read/:id"} component={Reader} />
       <Route path={"/admin"} component={Admin} />
+      <Route path={"/bookshelf"} component={Bookshelf} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>
