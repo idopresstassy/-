@@ -44,12 +44,16 @@ export default function Home() {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b border-border bg-card sticky top-0 z-50">
-        <div className="container flex items-center justify-between h-16">
-          <Link href="/" className="flex items-center gap-2">
-            <BookOpen className="w-6 h-6 text-primary" />
-            <h1 className="text-xl font-bold text-foreground font-serif">문학도서관</h1>
-          </Link>
-          <div className="flex items-center gap-3">
+        <div className="container flex flex-col">
+          {/* Top row: Logo */}
+          <div className="flex items-center justify-center py-2">
+            <Link href="/" className="flex items-center gap-2">
+              <BookOpen className="w-7 h-7 text-primary" />
+              <h1 className="text-2xl font-bold text-foreground font-serif">문학도서관</h1>
+            </Link>
+          </div>
+          {/* Bottom row: Navigation */}
+          <div className="flex items-center justify-center gap-3 pb-2">
             <Link href="/bookshelf">
               <Button variant="ghost" size="sm">
                 <Library className="w-4 h-4 mr-1" /> 내 책장
