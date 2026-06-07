@@ -205,20 +205,27 @@ export default function Home() {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="overflow-y-auto p-2">
+            <div className="overflow-y-auto p-3">
               {allBooks && allBooks.length > 0 ? (
-                <div className="grid grid-cols-1 gap-1">
-                  {allBooks.map((book) => (
-                    <Link
-                      key={book.id}
-                      href={`/read/${book.id}`}
-                      className="flex items-center justify-between p-3 rounded-lg hover:bg-secondary/50 transition-colors"
-                      onClick={() => setShowBookList(false)}
-                    >
-                      <span className="font-medium text-foreground text-sm">{book.title}</span>
-                      <span className="text-xs text-muted-foreground ml-2 shrink-0">{book.author}</span>
-                    </Link>
-                  ))}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {allBooks.map((book) => {
+                    const genreColor = book.genre === "classic"
+                      ? "bg-amber-50 border-amber-200 hover:bg-amber-100"
+                      : book.genre === "modern"
+                      ? "bg-emerald-50 border-emerald-200 hover:bg-emerald-100"
+                      : "bg-sky-50 border-sky-200 hover:bg-sky-100";
+                    return (
+                      <Link
+                        key={book.id}
+                        href={`/read/${book.id}`}
+                        className={`flex flex-col items-center justify-center p-3 rounded-md border text-center transition-colors ${genreColor}`}
+                        onClick={() => setShowBookList(false)}
+                      >
+                        <span className="font-semibold text-foreground text-sm leading-tight line-clamp-2">{book.title}</span>
+                        <span className="text-xs text-muted-foreground mt-1">{book.author}</span>
+                      </Link>
+                    );
+                  })}
                 </div>
               ) : (
                 <p className="text-center py-8 text-muted-foreground">등록된 도서가 없습니다.</p>
