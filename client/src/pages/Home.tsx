@@ -78,7 +78,7 @@ export default function Home() {
       {/* Announcement Banner */}
       <div className="bg-secondary/70 border-b border-border">
         <div className="container py-2 text-center">
-          <p className="text-sm text-foreground">한국문화도서관은 여러분의 후원과 구독으로 운영됩니다</p>
+          <p className="text-sm text-foreground">문화도서관은 여러분의 후원과 구독으로 운영됩니다</p>
         </div>
       </div>
 

@@ -93,7 +93,7 @@ export default function Reader() {
   const [containerWidth, setContainerWidth] = useState<number | null>(null);
 
   const [fontSize, setFontSize] = useState(18);
-  const [lineHeight, setLineHeight] = useState(1.8);
+  const [lineHeight, setLineHeight] = useState(1.6);
   const [theme, setTheme] = useState<Theme>("light");
   const [showSettings, setShowSettings] = useState(false);
 
