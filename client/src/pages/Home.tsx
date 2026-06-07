@@ -48,7 +48,7 @@ export default function Home() {
           {/* Top row: Logo */}
           <div className="flex items-center justify-center py-2">
             <Link href="/" className="flex items-center gap-2">
-              <BookOpen className="w-7 h-7 text-primary" />
+              <img src="/manus-storage/logo_d34d7a80.png" alt="문학도서관 로고" className="w-10 h-10 rounded-full" />
               <h1 className="text-2xl font-bold text-foreground font-serif">문학도서관</h1>
             </Link>
           </div>
