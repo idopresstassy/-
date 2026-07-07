@@ -79,3 +79,13 @@ export const bookshelf = mysqlTable("bookshelf", {
 });
 
 export type BookshelfItem = typeof bookshelf.$inferSelect;
+
+// 방문 기록 (통계용)
+export const visits = mysqlTable("visits", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId"),
+  sessionId: varchar("sessionId", { length: 100 }),
+  visitedAt: timestamp("visitedAt").defaultNow().notNull(),
+});
+
+export type Visit = typeof visits.$inferSelect;

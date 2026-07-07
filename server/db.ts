@@ -1,6 +1,6 @@
-import { eq, and, like, or, sql } from "drizzle-orm";
+import { eq, and, like, or, sql, desc, gte, count } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, books, donationInfo, bookmarks, readingProgress, bookshelf } from "../drizzle/schema";
+import { InsertUser, users, books, donationInfo, bookmarks, readingProgress, bookshelf, visits } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -209,4 +209,89 @@ export async function isInBookshelf(userId: number, bookId: number) {
   const result = await db.select({ id: bookshelf.id }).from(bookshelf)
     .where(and(eq(bookshelf.userId, userId), eq(bookshelf.bookId, bookId))).limit(1);
   return result.length > 0;
+}
+
+// ==================== ADMIN: STATISTICS ====================
+export async function getTotalUserCount() {
+  const db = await getDb();
+  if (!db) return 0;
+  const result = await db.select({ count: count() }).from(users);
+  return result[0]?.count || 0;
+}
+
+export async function getTodayVisitorCount() {
+  const db = await getDb();
+  if (!db) return 0;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  // sessionId 기준으로 중복 제거하여 실제 방문자 수 집계
+  const result = await db.select({ count: sql<number>`COUNT(DISTINCT COALESCE(sessionId, id))` }).from(visits)
+    .where(gte(visits.visitedAt, today));
+  return result[0]?.count || 0;
+}
+
+export async function getPopularBooks(limit = 10) {
+  const db = await getDb();
+  if (!db) return [];
+  // 인기 도서 = 읽기 진행도 레코드가 가장 많은 도서
+  const result = await db.select({
+    bookId: readingProgress.bookId,
+    readerCount: count(),
+    title: books.title,
+    author: books.author,
+  }).from(readingProgress)
+    .innerJoin(books, eq(readingProgress.bookId, books.id))
+    .groupBy(readingProgress.bookId, books.title, books.author)
+    .orderBy(desc(count()))
+    .limit(limit);
+  return result;
+}
+
+export async function recordVisit(userId?: number, sessionId?: string) {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(visits).values({ userId: userId || null, sessionId: sessionId || null });
+}
+
+// ==================== ADMIN: USER MANAGEMENT ====================
+export async function getAllUsers() {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select({
+    id: users.id,
+    openId: users.openId,
+    name: users.name,
+    email: users.email,
+    role: users.role,
+    createdAt: users.createdAt,
+    lastSignedIn: users.lastSignedIn,
+  }).from(users).orderBy(desc(users.createdAt));
+}
+
+export async function getUserReadingHistory(userId: number) {
+  const db = await getDb();
+  if (!db) return { reading: [], completed: [] };
+  const all = await db.select({
+    bookId: readingProgress.bookId,
+    currentPage: readingProgress.currentPage,
+    totalPages: readingProgress.totalPages,
+    updatedAt: readingProgress.updatedAt,
+    title: books.title,
+    author: books.author,
+  }).from(readingProgress)
+    .innerJoin(books, eq(readingProgress.bookId, books.id))
+    .where(eq(readingProgress.userId, userId))
+    .orderBy(desc(readingProgress.updatedAt));
+  
+  // 현재 읽는 책 vs 완독한 책 분리 (currentPage >= totalPages - 1 이면 완독)
+  const reading = all.filter(item => item.totalPages === 0 || item.currentPage < item.totalPages - 1);
+  const completed = all.filter(item => item.totalPages > 0 && item.currentPage >= item.totalPages - 1);
+  return { reading, completed };
+}
+
+export async function getAllUserEmails() {
+  const db = await getDb();
+  if (!db) return [];
+  const result = await db.select({ email: users.email, name: users.name }).from(users);
+  return result.filter(u => u.email && u.email.trim() !== "");
 }

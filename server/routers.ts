@@ -163,6 +163,69 @@ export const appRouter = router({
       }),
   }),
 
+  // ==================== ADMIN ====================
+  admin: router({
+    stats: adminProcedure.query(async () => {
+      const [totalUsers, todayVisitors, popularBooks] = await Promise.all([
+        db.getTotalUserCount(),
+        db.getTodayVisitorCount(),
+        db.getPopularBooks(10),
+      ]);
+      return { totalUsers, todayVisitors, popularBooks };
+    }),
+
+    users: adminProcedure.query(async () => {
+      return await db.getAllUsers();
+    }),
+
+    userReadingHistory: adminProcedure
+      .input(z.object({ userId: z.number() }))
+      .query(async ({ input }) => {
+        return await db.getUserReadingHistory(input.userId);
+      }),
+
+    sendBulkEmail: adminProcedure
+      .input(z.object({
+        subject: z.string().min(1),
+        body: z.string().min(1),
+      }))
+      .mutation(async ({ input }) => {
+        const recipients = await db.getAllUserEmails();
+        if (recipients.length === 0) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "이메일이 등록된 회원이 없습니다." });
+        }
+        
+        // 플랫폼 알림 시스템을 통해 관리자에게 발송 결과 알림
+        // (현재 플랫폼에서는 직접 SMTP 메일 발송이 지원되지 않아 notifyOwner로 대체)
+        const { notifyOwner } = await import("./_core/notification");
+        
+        const recipientList = recipients.map(r => `${r.name || '미설정'} <${r.email}>`).join('\n');
+        const sent = await notifyOwner({
+          title: `[홍보 메일 발송] ${input.subject}`,
+          content: `대상: ${recipients.length}명\n\n수신자 목록:\n${recipientList}\n\n--- 메일 내용 ---\n${input.body}`,
+        });
+        
+        if (!sent) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "알림 서비스 연결에 실패했습니다. 잠시 후 다시 시도해주세요." });
+        }
+        
+        return { success: true, sentCount: recipients.length };
+      }),
+  }),
+
+  // 방문 기록
+  visit: router({
+    record: publicProcedure.mutation(async ({ ctx }) => {
+      const userId = ctx.user?.id;
+      // IP + User-Agent 기반으로 세션 ID 생성 (동일 브라우저 중복 방지)
+      const ip = ctx.req.headers["x-forwarded-for"] || ctx.req.socket.remoteAddress || "unknown";
+      const ua = ctx.req.headers["user-agent"] || "unknown";
+      const sessionId = `${String(ip).split(",")[0].trim()}_${ua.slice(0, 50)}`;
+      await db.recordVisit(userId, sessionId);
+      return { success: true };
+    }),
+  }),
+
   bookshelf: router({
     list: protectedProcedure
       .query(async ({ ctx }) => {

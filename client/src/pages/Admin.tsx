@@ -3,9 +3,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
 import { getLoginUrl } from "@/const";
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { useLocation } from "wouter";
-import { ChevronLeft, Plus, Trash2, Edit, Save, X, Upload, Sparkles, Loader2 } from "lucide-react";
+import { ChevronLeft, Plus, Trash2, Edit, Save, X, Upload, Sparkles, Loader2, Users, BarChart3, BookOpen, Mail, Send } from "lucide-react";
 
 const GENRE_OPTIONS = [
   { value: "classic" as const, label: "고전" },
@@ -13,33 +13,13 @@ const GENRE_OPTIONS = [
   { value: "foreign" as const, label: "해외" },
 ];
 
+type AdminTab = "dashboard" | "books" | "members" | "email" | "donation";
+
 export default function Admin() {
   const { user, isAuthenticated, loading } = useAuth();
   const [, setLocation] = useLocation();
   const utils = trpc.useUtils();
-
-  const { data: books, isLoading: booksLoading } = trpc.books.list.useQuery({});
-  const { data: donation } = trpc.donation.get.useQuery();
-
-  const createBook = trpc.books.create.useMutation({ onSuccess: () => utils.books.list.invalidate() });
-  const updateBook = trpc.books.update.useMutation({ onSuccess: () => utils.books.list.invalidate() });
-  const deleteBook = trpc.books.delete.useMutation({ onSuccess: () => utils.books.list.invalidate() });
-  const updateDonation = trpc.donation.update.useMutation({ onSuccess: () => utils.donation.get.invalidate() });
-
-  const [editingBook, setEditingBook] = useState<number | null>(null);
-  const [bookForm, setBookForm] = useState({ title: "", author: "", genre: "classic" as "classic" | "modern" | "foreign", content: "", description: "", youtubeUrl: "", googleDriveUrl: "" });
-  const [showAddBook, setShowAddBook] = useState(false);
-  const [donationForm, setDonationForm] = useState<Record<string, string>>({});
-  const [editingDonation, setEditingDonation] = useState(false);
-
-  // 파일 업로드 관련 상태
-  const [uploading, setUploading] = useState(false);
-  const [uploadResult, setUploadResult] = useState<any>(null);
-  const [uploadError, setUploadError] = useState("");
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // AI 분석 관련 상태
-  const [analyzingBookId, setAnalyzingBookId] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState<AdminTab>("dashboard");
 
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center"><p>로딩 중...</p></div>;
@@ -67,6 +47,160 @@ export default function Admin() {
       </div>
     );
   }
+
+  const tabs = [
+    { id: "dashboard" as const, label: "대시보드", icon: BarChart3 },
+    { id: "books" as const, label: "도서 관리", icon: BookOpen },
+    { id: "members" as const, label: "회원 관리", icon: Users },
+    { id: "email" as const, label: "메일 발송", icon: Mail },
+    { id: "donation" as const, label: "후원 설정", icon: Edit },
+  ];
+
+  return (
+    <div className="min-h-screen bg-background">
+      <header className="border-b border-border bg-card sticky top-0 z-50">
+        <div className="container flex items-center justify-between h-14">
+          <Button variant="ghost" size="sm" onClick={() => setLocation("/")}>
+            <ChevronLeft className="w-4 h-4 mr-1" /> 메인으로
+          </Button>
+          <h1 className="text-lg font-bold">관리자 페이지</h1>
+          <div className="w-20" />
+        </div>
+      </header>
+
+      {/* Tab Navigation */}
+      <div className="border-b border-border bg-card">
+        <div className="container flex overflow-x-auto">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                activeTab === tab.id
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <tab.icon className="w-4 h-4" />
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="container py-8">
+        {activeTab === "dashboard" && <DashboardTab />}
+        {activeTab === "books" && <BooksTab utils={utils} />}
+        {activeTab === "members" && <MembersTab />}
+        {activeTab === "email" && <EmailTab />}
+        {activeTab === "donation" && <DonationTab utils={utils} />}
+      </div>
+    </div>
+  );
+}
+
+// ==================== DASHBOARD TAB ====================
+function DashboardTab() {
+  const { data: stats, isLoading } = trpc.admin.stats.useQuery();
+
+  if (isLoading) {
+    return <div className="animate-pulse text-muted-foreground text-center py-12">통계 로딩 중...</div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="border border-border rounded-lg p-6 bg-card">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+              <Users className="w-5 h-5 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">전체 회원 수</p>
+              <p className="text-2xl font-bold">{stats?.totalUsers ?? 0}명</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="border border-border rounded-lg p-6 bg-card">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+              <BarChart3 className="w-5 h-5 text-green-600" />
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">오늘 방문자</p>
+              <p className="text-2xl font-bold">{stats?.todayVisitors ?? 0}명</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="border border-border rounded-lg p-6 bg-card">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
+              <BookOpen className="w-5 h-5 text-purple-600" />
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">인기 도서 1위</p>
+              <p className="text-lg font-bold truncate">{stats?.popularBooks?.[0]?.title ?? "-"}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Popular Books Ranking */}
+      <section className="border border-border rounded-lg p-6 bg-card">
+        <h2 className="text-lg font-bold mb-4">📊 인기 도서 순위</h2>
+        {stats?.popularBooks && stats.popularBooks.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="text-left py-2 px-3">순위</th>
+                  <th className="text-left py-2 px-3">제목</th>
+                  <th className="text-left py-2 px-3">작가</th>
+                  <th className="text-right py-2 px-3">독자 수</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats.popularBooks.map((book, idx) => (
+                  <tr key={book.bookId} className="border-b border-border/50">
+                    <td className="py-2 px-3 font-medium">{idx + 1}</td>
+                    <td className="py-2 px-3">{book.title}</td>
+                    <td className="py-2 px-3 text-muted-foreground">{book.author}</td>
+                    <td className="py-2 px-3 text-right">{book.readerCount}명</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="text-muted-foreground text-center py-4">아직 독서 기록이 없습니다.</p>
+        )}
+      </section>
+    </div>
+  );
+}
+
+// ==================== BOOKS TAB ====================
+function BooksTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> }) {
+  const { data: books, isLoading: booksLoading } = trpc.books.list.useQuery({});
+  const createBook = trpc.books.create.useMutation({ onSuccess: () => utils.books.list.invalidate() });
+  const updateBook = trpc.books.update.useMutation({ onSuccess: () => utils.books.list.invalidate() });
+  const deleteBook = trpc.books.delete.useMutation({ onSuccess: () => utils.books.list.invalidate() });
+
+  const [editingBook, setEditingBook] = useState<number | null>(null);
+  const [bookForm, setBookForm] = useState({ title: "", author: "", genre: "classic" as "classic" | "modern" | "foreign", content: "", description: "", youtubeUrl: "", googleDriveUrl: "" });
+  const [showAddBook, setShowAddBook] = useState(false);
+
+  // 파일 업로드 관련 상태
+  const [uploading, setUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState<any>(null);
+  const [uploadError, setUploadError] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // AI 분석 관련 상태
+  const [analyzingBookId, setAnalyzingBookId] = useState<number | null>(null);
 
   const startEditBook = async (book: { id: number; title: string; author: string; genre: string; description?: string | null; youtubeUrl?: string | null; googleDriveUrl?: string | null }) => {
     setEditingBook(book.id);
@@ -119,26 +253,17 @@ export default function Admin() {
     await deleteBook.mutateAsync({ id });
   };
 
-  // 파일 업로드 핸들러
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     setUploading(true);
     setUploadError("");
     setUploadResult(null);
-
     try {
       const formData = new FormData();
       formData.append("file", file);
-
-      const response = await fetch("/api/upload/book", {
-        method: "POST",
-        body: formData,
-      });
-
+      const response = await fetch("/api/upload/book", { method: "POST", body: formData });
       const result = await response.json();
-
       if (!response.ok) {
         setUploadError(result.error || "업로드 실패");
       } else {
@@ -153,15 +278,11 @@ export default function Admin() {
     }
   };
 
-  // AI 분석 핸들러 (기존 도서에 차례/학습자료 생성)
   const handleAIAnalyze = async (bookId: number) => {
     if (!confirm("AI가 이 도서의 차례와 학습자료를 자동 생성합니다. 진행하시겠습니까?")) return;
-    
     setAnalyzingBookId(bookId);
     try {
-      const response = await fetch(`/api/upload/analyze/${bookId}`, {
-        method: "POST",
-      });
+      const response = await fetch(`/api/upload/analyze/${bookId}`, { method: "POST" });
       const result = await response.json();
       if (!response.ok) {
         alert(`AI 분석 실패: ${result.error}`);
@@ -176,9 +297,377 @@ export default function Admin() {
     }
   };
 
-  const startEditDonation = () => {
-    setEditingDonation(true);
-    setDonationForm({
+  return (
+    <div className="space-y-6">
+      {/* File Upload Section */}
+      <section className="border border-border rounded-lg p-6 bg-card">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold">📁 파일로 도서 등록 (AI 자동 처리)</h2>
+        </div>
+        <p className="text-sm text-muted-foreground mb-4">
+          .docx 또는 .txt 파일을 업로드하면 AI가 자동으로 제목, 작가, 분류를 인식하고, 차례와 학습자료를 생성합니다.
+        </p>
+        <div className="flex items-center gap-3">
+          <input ref={fileInputRef} type="file" accept=".docx,.txt" onChange={handleFileUpload} className="hidden" />
+          <Button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="gap-2">
+            {uploading ? (<><Loader2 className="w-4 h-4 animate-spin" />AI 처리 중...</>) : (<><Upload className="w-4 h-4" />파일 업로드</>)}
+          </Button>
+          <span className="text-xs text-muted-foreground">.docx 또는 .txt (최대 50MB)</span>
+        </div>
+
+        {uploading && (
+          <div className="mt-4 p-4 bg-secondary/30 rounded-lg">
+            <div className="flex items-center gap-2 text-sm">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>AI가 도서 정보를 분석하고 차례/학습자료를 생성하고 있습니다... (30초~1분 소요)</span>
+            </div>
+          </div>
+        )}
+
+        {uploadError && (
+          <div className="mt-4 p-4 bg-destructive/10 border border-destructive/30 rounded-lg">
+            <p className="text-sm text-destructive">{uploadError}</p>
+          </div>
+        )}
+
+        {uploadResult && (
+          <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg space-y-2">
+            <p className="text-sm font-medium text-green-800">✅ 도서 등록 완료!</p>
+            <div className="text-sm space-y-1">
+              <p><strong>제목:</strong> {uploadResult.title}</p>
+              <p><strong>작가:</strong> {uploadResult.author}</p>
+              <p><strong>분류:</strong> {uploadResult.genre === "classic" ? "고전" : uploadResult.genre === "modern" ? "현대" : "해외"}</p>
+              {uploadResult.tableOfContents && (
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-green-700 font-medium">📋 생성된 차례 보기</summary>
+                  <pre className="mt-1 text-xs whitespace-pre-wrap bg-white p-2 rounded">{uploadResult.tableOfContents}</pre>
+                </details>
+              )}
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* Books List */}
+      <section className="border border-border rounded-lg p-6 bg-card">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold">도서 목록</h2>
+          <Button size="sm" onClick={() => { setShowAddBook(true); setBookForm({ title: "", author: "", genre: "classic", content: "", description: "", youtubeUrl: "", googleDriveUrl: "" }); }}>
+            <Plus className="w-4 h-4 mr-1" /> 수동 추가
+          </Button>
+        </div>
+
+        {showAddBook && (
+          <div className="border border-border rounded p-4 mb-4 bg-secondary/30 space-y-3">
+            <h3 className="font-medium">새 도서 수동 추가</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Input placeholder="제목" value={bookForm.title} onChange={(e) => setBookForm({ ...bookForm, title: e.target.value })} />
+              <Input placeholder="작가" value={bookForm.author} onChange={(e) => setBookForm({ ...bookForm, author: e.target.value })} />
+              <select className="border border-input rounded px-3 py-2 text-sm bg-background" value={bookForm.genre} onChange={(e) => setBookForm({ ...bookForm, genre: e.target.value as any })}>
+                {GENRE_OPTIONS.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
+              </select>
+              <Input placeholder="YouTube URL (선택)" value={bookForm.youtubeUrl} onChange={(e) => setBookForm({ ...bookForm, youtubeUrl: e.target.value })} />
+            </div>
+            <textarea className="w-full border border-input rounded px-3 py-2 text-sm bg-background resize-y min-h-[60px]" placeholder="작품소개" value={bookForm.description} onChange={(e) => setBookForm({ ...bookForm, description: e.target.value })} />
+            <Input placeholder="구글 드라이브 문서 URL (선택)" value={bookForm.googleDriveUrl} onChange={(e) => setBookForm({ ...bookForm, googleDriveUrl: e.target.value })} />
+            <textarea className="w-full border border-input rounded px-3 py-2 text-sm bg-background resize-y min-h-[120px]" placeholder="본문 내용 (구글 드라이브 URL을 입력한 경우 비워둘 수 있습니다)" value={bookForm.content} onChange={(e) => setBookForm({ ...bookForm, content: e.target.value })} />
+            <div className="flex gap-2">
+              <Button size="sm" onClick={handleAddBook} disabled={createBook.isPending}><Save className="w-4 h-4 mr-1" /> 추가</Button>
+              <Button variant="outline" size="sm" onClick={() => setShowAddBook(false)}><X className="w-4 h-4 mr-1" /> 취소</Button>
+            </div>
+          </div>
+        )}
+
+        {booksLoading ? (
+          <div className="animate-pulse text-muted-foreground">로딩 중...</div>
+        ) : books && books.length > 0 ? (
+          <div className="space-y-3">
+            {books.map((book) => (
+              <div key={book.id} className="border border-border rounded p-4">
+                {editingBook === book.id ? (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <Input placeholder="제목" value={bookForm.title} onChange={(e) => setBookForm({ ...bookForm, title: e.target.value })} />
+                      <Input placeholder="작가" value={bookForm.author} onChange={(e) => setBookForm({ ...bookForm, author: e.target.value })} />
+                      <select className="border border-input rounded px-3 py-2 text-sm bg-background" value={bookForm.genre} onChange={(e) => setBookForm({ ...bookForm, genre: e.target.value as any })}>
+                        {GENRE_OPTIONS.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
+                      </select>
+                      <Input placeholder="YouTube URL" value={bookForm.youtubeUrl} onChange={(e) => setBookForm({ ...bookForm, youtubeUrl: e.target.value })} />
+                    </div>
+                    <textarea className="w-full border border-input rounded px-3 py-2 text-sm bg-background resize-y min-h-[60px]" placeholder="작품소개" value={bookForm.description} onChange={(e) => setBookForm({ ...bookForm, description: e.target.value })} />
+                    <Input placeholder="구글 드라이브 문서 URL" value={bookForm.googleDriveUrl} onChange={(e) => setBookForm({ ...bookForm, googleDriveUrl: e.target.value })} />
+                    <textarea className="w-full border border-input rounded px-3 py-2 text-sm bg-background resize-y min-h-[80px]" placeholder="본문 수정 (비워두면 기존 내용 유지)" value={bookForm.content} onChange={(e) => setBookForm({ ...bookForm, content: e.target.value })} />
+                    <div className="flex gap-2">
+                      <Button size="sm" onClick={handleSaveBook} disabled={updateBook.isPending}><Save className="w-4 h-4 mr-1" /> 저장</Button>
+                      <Button variant="outline" size="sm" onClick={() => setEditingBook(null)}><X className="w-4 h-4 mr-1" /> 취소</Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-xs px-2 py-0.5 rounded bg-secondary text-secondary-foreground mr-2">
+                        {book.genre === "classic" ? "고전" : book.genre === "modern" ? "현대" : "해외"}
+                      </span>
+                      <span className="font-medium">{book.title}</span>
+                      <span className="text-muted-foreground ml-2">— {book.author}</span>
+                    </div>
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="sm" className="text-purple-600 hover:text-purple-800" onClick={() => handleAIAnalyze(book.id)} disabled={analyzingBookId === book.id} title="AI 분석 (차례/학습자료 생성)">
+                        {analyzingBookId === book.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => startEditBook(book)}><Edit className="w-4 h-4" /></Button>
+                      <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDeleteBook(book.id)}><Trash2 className="w-4 h-4" /></Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-muted-foreground text-center py-8">등록된 도서가 없습니다.</p>
+        )}
+      </section>
+    </div>
+  );
+}
+
+// ==================== MEMBERS TAB ====================
+function MembersTab() {
+  const { data: members, isLoading } = trpc.admin.users.useQuery();
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  const { data: readingHistory, isLoading: historyLoading } = trpc.admin.userReadingHistory.useQuery(
+    { userId: selectedUserId! },
+    { enabled: selectedUserId !== null }
+  );
+
+  if (isLoading) {
+    return <div className="animate-pulse text-muted-foreground text-center py-12">회원 목록 로딩 중...</div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      <section className="border border-border rounded-lg p-6 bg-card">
+        <h2 className="text-lg font-bold mb-4">👥 회원 목록 ({members?.length ?? 0}명)</h2>
+        {members && members.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="text-left py-2 px-3">이름</th>
+                  <th className="text-left py-2 px-3">이메일</th>
+                  <th className="text-left py-2 px-3">역할</th>
+                  <th className="text-left py-2 px-3">가입일</th>
+                  <th className="text-left py-2 px-3">최근 로그인</th>
+                  <th className="text-center py-2 px-3">독서 현황</th>
+                </tr>
+              </thead>
+              <tbody>
+                {members.map((member) => (
+                  <tr key={member.id} className="border-b border-border/50 hover:bg-secondary/30">
+                    <td className="py-2 px-3 font-medium">{member.name || "미설정"}</td>
+                    <td className="py-2 px-3 text-muted-foreground">{member.email || "-"}</td>
+                    <td className="py-2 px-3">
+                      <span className={`text-xs px-2 py-0.5 rounded ${member.role === "admin" ? "bg-purple-100 text-purple-700" : "bg-gray-100 text-gray-700"}`}>
+                        {member.role === "admin" ? "관리자" : "일반"}
+                      </span>
+                    </td>
+                    <td className="py-2 px-3 text-muted-foreground">{new Date(member.createdAt).toLocaleDateString("ko-KR")}</td>
+                    <td className="py-2 px-3 text-muted-foreground">{new Date(member.lastSignedIn).toLocaleDateString("ko-KR")}</td>
+                    <td className="py-2 px-3 text-center">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setSelectedUserId(selectedUserId === member.id ? null : member.id)}
+                        className={selectedUserId === member.id ? "text-primary" : ""}
+                      >
+                        <BookOpen className="w-4 h-4" />
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="text-muted-foreground text-center py-4">가입된 회원이 없습니다.</p>
+        )}
+      </section>
+
+      {/* Reading History Panel */}
+      {selectedUserId !== null && (
+        <section className="border border-border rounded-lg p-6 bg-card">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-bold">📖 회원 독서 현황</h2>
+            <Button variant="ghost" size="sm" onClick={() => setSelectedUserId(null)}>
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+          {historyLoading ? (
+            <div className="animate-pulse text-muted-foreground">로딩 중...</div>
+          ) : readingHistory && (readingHistory.reading.length > 0 || readingHistory.completed.length > 0) ? (
+            <div className="space-y-6">
+              {/* 현재 읽고 있는 책 */}
+              {readingHistory.reading.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold mb-2 text-blue-700">📖 현재 읽고 있는 책</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border">
+                          <th className="text-left py-2 px-3">도서</th>
+                          <th className="text-left py-2 px-3">작가</th>
+                          <th className="text-left py-2 px-3">진행도</th>
+                          <th className="text-left py-2 px-3">마지막 읽은 날</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {readingHistory.reading.map((item: any) => {
+                          const progress = item.totalPages > 0 ? Math.round((item.currentPage / item.totalPages) * 100) : 0;
+                          return (
+                            <tr key={item.bookId} className="border-b border-border/50">
+                              <td className="py-2 px-3 font-medium">{item.title}</td>
+                              <td className="py-2 px-3 text-muted-foreground">{item.author}</td>
+                              <td className="py-2 px-3">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-20 h-2 bg-secondary rounded-full overflow-hidden">
+                                    <div className="h-full bg-blue-500 rounded-full" style={{ width: `${progress}%` }} />
+                                  </div>
+                                  <span className="text-xs text-muted-foreground">{progress}%</span>
+                                </div>
+                              </td>
+                              <td className="py-2 px-3 text-muted-foreground">{new Date(item.updatedAt).toLocaleDateString("ko-KR")}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+              {/* 완독한 책 */}
+              {readingHistory.completed.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold mb-2 text-green-700">✅ 완독한 책</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border">
+                          <th className="text-left py-2 px-3">도서</th>
+                          <th className="text-left py-2 px-3">작가</th>
+                          <th className="text-left py-2 px-3">완독일</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {readingHistory.completed.map((item: any) => (
+                          <tr key={item.bookId} className="border-b border-border/50">
+                            <td className="py-2 px-3 font-medium">{item.title}</td>
+                            <td className="py-2 px-3 text-muted-foreground">{item.author}</td>
+                            <td className="py-2 px-3 text-muted-foreground">{new Date(item.updatedAt).toLocaleDateString("ko-KR")}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="text-muted-foreground text-center py-4">이 회원의 독서 기록이 없습니다.</p>
+          )}
+        </section>
+      )}
+    </div>
+  );
+}
+
+// ==================== EMAIL TAB ====================
+function EmailTab() {
+  const [subject, setSubject] = useState("");
+  const [body, setBody] = useState("");
+  const [sending, setSending] = useState(false);
+  const [result, setResult] = useState<{ success: boolean; sentCount?: number; message?: string } | null>(null);
+
+  const sendEmail = trpc.admin.sendBulkEmail.useMutation({
+    onSuccess: (data) => {
+      setResult({ success: true, sentCount: data.sentCount });
+      setSubject("");
+      setBody("");
+    },
+    onError: (err) => {
+      setResult({ success: false, message: err.message });
+    },
+  });
+
+  const handleSend = async () => {
+    if (!subject.trim() || !body.trim()) {
+      alert("제목과 내용을 모두 입력해주세요.");
+      return;
+    }
+    if (!confirm(`전체 회원에게 홍보 메일을 발송하시겠습니까?\n\n제목: ${subject}`)) return;
+    setSending(true);
+    setResult(null);
+    try {
+      await sendEmail.mutateAsync({ subject, body });
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <section className="border border-border rounded-lg p-6 bg-card">
+        <h2 className="text-lg font-bold mb-4">📧 전체 홍보 메일 발송</h2>
+        <p className="text-sm text-muted-foreground mb-4">
+          가입된 모든 회원의 이메일로 홍보 메일을 일괄 발송합니다.
+        </p>
+
+        <div className="space-y-4">
+          <div>
+            <label className="text-sm font-medium mb-1 block">메일 제목</label>
+            <Input
+              placeholder="예: 이도 명작도서관 신간 안내"
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium mb-1 block">메일 내용</label>
+            <textarea
+              className="w-full border border-input rounded px-3 py-2 text-sm bg-background resize-y min-h-[200px]"
+              placeholder="메일 본문을 작성해주세요..."
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+            />
+          </div>
+          <Button onClick={handleSend} disabled={sending || !subject.trim() || !body.trim()} className="gap-2">
+            {sending ? (<><Loader2 className="w-4 h-4 animate-spin" />발송 중...</>) : (<><Send className="w-4 h-4" />전체 발송</>)}
+          </Button>
+        </div>
+
+        {result && (
+          <div className={`mt-4 p-4 rounded-lg ${result.success ? "bg-green-50 border border-green-200" : "bg-destructive/10 border border-destructive/30"}`}>
+            {result.success ? (
+              <p className="text-sm text-green-800">✅ {result.sentCount}명에게 메일이 발송되었습니다.</p>
+            ) : (
+              <p className="text-sm text-destructive">❌ 발송 실패: {result.message}</p>
+            )}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+// ==================== DONATION TAB ====================
+function DonationTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> }) {
+  const { data: donation } = trpc.donation.get.useQuery();
+  const updateDonation = trpc.donation.update.useMutation({ onSuccess: () => utils.donation.get.invalidate() });
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState<Record<string, string>>({});
+
+  const startEdit = () => {
+    setEditing(true);
+    setForm({
       bankName: donation?.bankName || "",
       accountNumber: donation?.accountNumber || "",
       accountHolder: donation?.accountHolder || "",
@@ -190,306 +679,64 @@ export default function Admin() {
     });
   };
 
-  const handleSaveDonation = async () => {
-    await updateDonation.mutateAsync(donationForm);
-    setEditingDonation(false);
+  const handleSave = async () => {
+    await updateDonation.mutateAsync(form);
+    setEditing(false);
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-card sticky top-0 z-50">
-        <div className="container flex items-center justify-between h-14">
-          <Button variant="ghost" size="sm" onClick={() => setLocation("/")}>
-            <ChevronLeft className="w-4 h-4 mr-1" /> 메인으로
+    <section className="border border-border rounded-lg p-6 bg-card">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-bold">후원 안내 정보</h2>
+        {!editing && (
+          <Button variant="outline" size="sm" onClick={startEdit}>
+            <Edit className="w-4 h-4 mr-1" /> 수정
           </Button>
-          <h1 className="text-lg font-bold">관리자 페이지</h1>
-          <div className="w-20" />
-        </div>
-      </header>
-
-      <div className="container py-8 space-y-8">
-        {/* File Upload Section */}
-        <section className="border border-border rounded-lg p-6 bg-card">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold">📁 파일로 도서 등록 (AI 자동 처리)</h2>
-          </div>
-          <p className="text-sm text-muted-foreground mb-4">
-            .docx 또는 .txt 파일을 업로드하면 AI가 자동으로 제목, 작가, 분류를 인식하고, 차례와 학습자료를 생성합니다.
-          </p>
-
-          <div className="flex items-center gap-3">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".docx,.txt"
-              onChange={handleFileUpload}
-              className="hidden"
-            />
-            <Button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-              className="gap-2"
-            >
-              {uploading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  AI 처리 중...
-                </>
-              ) : (
-                <>
-                  <Upload className="w-4 h-4" />
-                  파일 업로드
-                </>
-              )}
-            </Button>
-            <span className="text-xs text-muted-foreground">.docx 또는 .txt (최대 50MB)</span>
-          </div>
-
-          {uploading && (
-            <div className="mt-4 p-4 bg-secondary/30 rounded-lg">
-              <div className="flex items-center gap-2 text-sm">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span>AI가 도서 정보를 분석하고 차례/학습자료를 생성하고 있습니다... (30초~1분 소요)</span>
-              </div>
-            </div>
-          )}
-
-          {uploadError && (
-            <div className="mt-4 p-4 bg-destructive/10 border border-destructive/30 rounded-lg">
-              <p className="text-sm text-destructive">{uploadError}</p>
-            </div>
-          )}
-
-          {uploadResult && (
-            <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg space-y-2">
-              <p className="text-sm font-medium text-green-800">✅ 도서 등록 완료!</p>
-              <div className="text-sm space-y-1">
-                <p><strong>제목:</strong> {uploadResult.title}</p>
-                <p><strong>작가:</strong> {uploadResult.author}</p>
-                <p><strong>분류:</strong> {uploadResult.genre === "classic" ? "고전" : uploadResult.genre === "modern" ? "현대" : "해외"}</p>
-                <p><strong>작품소개:</strong> {uploadResult.description}</p>
-                {uploadResult.tableOfContents && (
-                  <details className="mt-2">
-                    <summary className="cursor-pointer text-green-700 font-medium">📋 생성된 차례 보기</summary>
-                    <pre className="mt-1 text-xs whitespace-pre-wrap bg-white p-2 rounded">{uploadResult.tableOfContents}</pre>
-                  </details>
-                )}
-                {uploadResult.studyMaterial && (
-                  <details className="mt-2">
-                    <summary className="cursor-pointer text-green-700 font-medium">📚 생성된 학습자료 미리보기</summary>
-                    <pre className="mt-1 text-xs whitespace-pre-wrap bg-white p-2 rounded">{uploadResult.studyMaterial}</pre>
-                  </details>
-                )}
-              </div>
-            </div>
-          )}
-        </section>
-
-        {/* Donation Info Section */}
-        <section className="border border-border rounded-lg p-6 bg-card">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold">후원 안내 정보</h2>
-            {!editingDonation && (
-              <Button variant="outline" size="sm" onClick={startEditDonation}>
-                <Edit className="w-4 h-4 mr-1" /> 수정
-              </Button>
-            )}
-          </div>
-
-          {editingDonation ? (
-            <div className="space-y-3">
-              {[
-                { key: "bankName", label: "은행명" },
-                { key: "accountNumber", label: "계좌번호" },
-                { key: "accountHolder", label: "예금주" },
-                { key: "description", label: "안내 문구" },
-                { key: "email", label: "이메일" },
-                { key: "representative", label: "대표자" },
-                { key: "closingMessage", label: "마무리 인사말" },
-                { key: "legalNotice", label: "법적 고지" },
-              ].map(({ key, label }) => (
-                <div key={key} className="flex items-center gap-3">
-                  <label className="w-28 text-sm font-medium text-muted-foreground shrink-0">{label}</label>
-                  {key === "description" || key === "closingMessage" || key === "legalNotice" ? (
-                    <textarea
-                      className="flex-1 border border-input rounded px-3 py-2 text-sm bg-background resize-y min-h-[60px]"
-                      value={donationForm[key] || ""}
-                      onChange={(e) => setDonationForm({ ...donationForm, [key]: e.target.value })}
-                    />
-                  ) : (
-                    <Input
-                      value={donationForm[key] || ""}
-                      onChange={(e) => setDonationForm({ ...donationForm, [key]: e.target.value })}
-                    />
-                  )}
-                </div>
-              ))}
-              <div className="flex gap-2 pt-2">
-                <Button size="sm" onClick={handleSaveDonation} disabled={updateDonation.isPending}>
-                  <Save className="w-4 h-4 mr-1" /> 저장
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => setEditingDonation(false)}>
-                  <X className="w-4 h-4 mr-1" /> 취소
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-              <div><span className="text-muted-foreground">은행명:</span> {donation?.bankName || "-"}</div>
-              <div><span className="text-muted-foreground">계좌번호:</span> {donation?.accountNumber || "-"}</div>
-              <div><span className="text-muted-foreground">예금주:</span> {donation?.accountHolder || "-"}</div>
-              <div><span className="text-muted-foreground">이메일:</span> {donation?.email || "-"}</div>
-              <div><span className="text-muted-foreground">대표자:</span> {donation?.representative || "-"}</div>
-              <div className="md:col-span-2"><span className="text-muted-foreground">안내 문구:</span> {donation?.description || "-"}</div>
-              <div className="md:col-span-2"><span className="text-muted-foreground">마무리 인사말:</span> {donation?.closingMessage || "-"}</div>
-              <div className="md:col-span-2"><span className="text-muted-foreground">법적 고지:</span> {donation?.legalNotice || "-"}</div>
-            </div>
-          )}
-        </section>
-
-        {/* Books Section */}
-        <section className="border border-border rounded-lg p-6 bg-card">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold">도서 관리</h2>
-            <Button size="sm" onClick={() => { setShowAddBook(true); setBookForm({ title: "", author: "", genre: "classic", content: "", description: "", youtubeUrl: "", googleDriveUrl: "" }); }}>
-              <Plus className="w-4 h-4 mr-1" /> 수동 추가
-            </Button>
-          </div>
-
-          {showAddBook && (
-            <div className="border border-border rounded p-4 mb-4 bg-secondary/30 space-y-3">
-              <h3 className="font-medium">새 도서 수동 추가</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <Input placeholder="제목" value={bookForm.title} onChange={(e) => setBookForm({ ...bookForm, title: e.target.value })} />
-                <Input placeholder="작가" value={bookForm.author} onChange={(e) => setBookForm({ ...bookForm, author: e.target.value })} />
-                <select
-                  className="border border-input rounded px-3 py-2 text-sm bg-background"
-                  value={bookForm.genre}
-                  onChange={(e) => setBookForm({ ...bookForm, genre: e.target.value as any })}
-                >
-                  {GENRE_OPTIONS.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
-                </select>
-                <Input placeholder="YouTube URL (선택)" value={bookForm.youtubeUrl} onChange={(e) => setBookForm({ ...bookForm, youtubeUrl: e.target.value })} />
-              </div>
-              <textarea
-                className="w-full border border-input rounded px-3 py-2 text-sm bg-background resize-y min-h-[60px]"
-                placeholder="작품소개 (홈 화면 도서 카드에 표시됩니다)"
-                value={bookForm.description}
-                onChange={(e) => setBookForm({ ...bookForm, description: e.target.value })}
-              />
-              <Input
-                placeholder="구글 드라이브 문서 URL (선택 — 이북 뷰어에서 내용을 불러옵니다)"
-                value={bookForm.googleDriveUrl}
-                onChange={(e) => setBookForm({ ...bookForm, googleDriveUrl: e.target.value })}
-              />
-              <p className="text-xs text-muted-foreground">구글 드라이브 URL을 입력하면 이북 뷰어에서 해당 문서의 내용을 자동으로 불러옵니다. 본문 직접 입력과 병행 가능합니다.</p>
-              <textarea
-                className="w-full border border-input rounded px-3 py-2 text-sm bg-background resize-y min-h-[120px]"
-                placeholder="본문 내용 (구글 드라이브 URL을 입력한 경우 비워둘 수 있습니다)"
-                value={bookForm.content}
-                onChange={(e) => setBookForm({ ...bookForm, content: e.target.value })}
-              />
-              <div className="flex gap-2">
-                <Button size="sm" onClick={handleAddBook} disabled={createBook.isPending}>
-                  <Save className="w-4 h-4 mr-1" /> 추가
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => setShowAddBook(false)}>
-                  <X className="w-4 h-4 mr-1" /> 취소
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {booksLoading ? (
-            <div className="animate-pulse text-muted-foreground">로딩 중...</div>
-          ) : books && books.length > 0 ? (
-            <div className="space-y-3">
-              {books.map((book) => (
-                <div key={book.id} className="border border-border rounded p-4">
-                  {editingBook === book.id ? (
-                    <div className="space-y-3">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <Input placeholder="제목" value={bookForm.title} onChange={(e) => setBookForm({ ...bookForm, title: e.target.value })} />
-                        <Input placeholder="작가" value={bookForm.author} onChange={(e) => setBookForm({ ...bookForm, author: e.target.value })} />
-                        <select
-                          className="border border-input rounded px-3 py-2 text-sm bg-background"
-                          value={bookForm.genre}
-                          onChange={(e) => setBookForm({ ...bookForm, genre: e.target.value as any })}
-                        >
-                          {GENRE_OPTIONS.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
-                        </select>
-                        <Input placeholder="YouTube URL" value={bookForm.youtubeUrl} onChange={(e) => setBookForm({ ...bookForm, youtubeUrl: e.target.value })} />
-                      </div>
-                      <textarea
-                        className="w-full border border-input rounded px-3 py-2 text-sm bg-background resize-y min-h-[60px]"
-                        placeholder="작품소개 (홈 화면 도서 카드에 표시됩니다)"
-                        value={bookForm.description}
-                        onChange={(e) => setBookForm({ ...bookForm, description: e.target.value })}
-                      />
-                      <Input
-                        placeholder="구글 드라이브 문서 URL"
-                        value={bookForm.googleDriveUrl}
-                        onChange={(e) => setBookForm({ ...bookForm, googleDriveUrl: e.target.value })}
-                      />
-                      <textarea
-                        className="w-full border border-input rounded px-3 py-2 text-sm bg-background resize-y min-h-[80px]"
-                        placeholder="본문 수정 (비워두면 기존 내용 유지)"
-                        value={bookForm.content}
-                        onChange={(e) => setBookForm({ ...bookForm, content: e.target.value })}
-                      />
-                      <div className="flex gap-2">
-                        <Button size="sm" onClick={handleSaveBook} disabled={updateBook.isPending}>
-                          <Save className="w-4 h-4 mr-1" /> 저장
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => setEditingBook(null)}>
-                          <X className="w-4 h-4 mr-1" /> 취소
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="text-xs px-2 py-0.5 rounded bg-secondary text-secondary-foreground mr-2">
-                          {book.genre === "classic" ? "고전" : book.genre === "modern" ? "현대" : "해외"}
-                        </span>
-                        <span className="font-medium">{book.title}</span>
-                        <span className="text-muted-foreground ml-2">— {book.author}</span>
-                        {book.googleDriveUrl && (
-                          <span className="ml-2 text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-700">Drive</span>
-                        )}
-                      </div>
-                      <div className="flex gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-purple-600 hover:text-purple-800"
-                          onClick={() => handleAIAnalyze(book.id)}
-                          disabled={analyzingBookId === book.id}
-                          title="AI 분석 (차례/학습자료 생성)"
-                        >
-                          {analyzingBookId === book.id ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Sparkles className="w-4 h-4" />
-                          )}
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => startEditBook(book)}>
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDeleteBook(book.id)}>
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-muted-foreground text-center py-8">등록된 도서가 없습니다.</p>
-          )}
-        </section>
+        )}
       </div>
-    </div>
+
+      {editing ? (
+        <div className="space-y-3">
+          {[
+            { key: "bankName", label: "은행명" },
+            { key: "accountNumber", label: "계좌번호" },
+            { key: "accountHolder", label: "예금주" },
+            { key: "description", label: "안내 문구" },
+            { key: "email", label: "이메일" },
+            { key: "representative", label: "대표자" },
+            { key: "closingMessage", label: "마무리 인사말" },
+            { key: "legalNotice", label: "법적 고지" },
+          ].map(({ key, label }) => (
+            <div key={key} className="flex items-center gap-3">
+              <label className="w-28 text-sm font-medium text-muted-foreground shrink-0">{label}</label>
+              {key === "description" || key === "closingMessage" || key === "legalNotice" ? (
+                <textarea
+                  className="flex-1 border border-input rounded px-3 py-2 text-sm bg-background resize-y min-h-[60px]"
+                  value={form[key] || ""}
+                  onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+                />
+              ) : (
+                <Input value={form[key] || ""} onChange={(e) => setForm({ ...form, [key]: e.target.value })} />
+              )}
+            </div>
+          ))}
+          <div className="flex gap-2 pt-2">
+            <Button size="sm" onClick={handleSave} disabled={updateDonation.isPending}><Save className="w-4 h-4 mr-1" /> 저장</Button>
+            <Button variant="outline" size="sm" onClick={() => setEditing(false)}><X className="w-4 h-4 mr-1" /> 취소</Button>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+          <div><span className="text-muted-foreground">은행명:</span> {donation?.bankName || "-"}</div>
+          <div><span className="text-muted-foreground">계좌번호:</span> {donation?.accountNumber || "-"}</div>
+          <div><span className="text-muted-foreground">예금주:</span> {donation?.accountHolder || "-"}</div>
+          <div><span className="text-muted-foreground">이메일:</span> {donation?.email || "-"}</div>
+          <div><span className="text-muted-foreground">대표자:</span> {donation?.representative || "-"}</div>
+          <div className="md:col-span-2"><span className="text-muted-foreground">안내 문구:</span> {donation?.description || "-"}</div>
+          <div className="md:col-span-2"><span className="text-muted-foreground">마무리 인사말:</span> {donation?.closingMessage || "-"}</div>
+          <div className="md:col-span-2"><span className="text-muted-foreground">법적 고지:</span> {donation?.legalNotice || "-"}</div>
+        </div>
+      )}
+    </section>
   );
 }

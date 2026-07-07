@@ -29,6 +29,13 @@
       "when": 1783423149059,
       "tag": "0003_optimal_cobalt_man",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1783428282063,
+      "tag": "0004_bright_franklin_richards",
+      "breakpoints": true
     }
   ]
 }
