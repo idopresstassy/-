@@ -30,12 +30,13 @@ import {
 } from "lucide-react";
 import { useOfflineCache } from "@/hooks/useOfflineCache";
 
-type Theme = "light" | "dark" | "sepia";
+type Theme = "light" | "dark" | "sepia" | "eink";
 
 const THEME_CLASSES = {
   light: "bg-[#fdfbf7] text-gray-900",
   dark: "bg-gray-900 text-gray-100",
   sepia: "bg-[#f4ecd8] text-[#5b4636]",
+  eink: "bg-[#FFFFFF] text-[#000000]",
 } as const;
 
 export default function Reader() {
@@ -117,6 +118,10 @@ export default function Reader() {
   const [lineHeight, setLineHeight] = useState(1.6);
   const [theme, setTheme] = useState<Theme>("light");
   const [showSettings, setShowSettings] = useState(false);
+  const [readMode, setReadMode] = useState<"page" | "scroll">("page");
+
+  // E-ink 모드에서는 애니메이션 비활성화
+  const isEinkMode = theme === "eink";
 
   const [hasRestoredProgress, setHasRestoredProgress] = useState(false);
 
@@ -638,39 +643,79 @@ export default function Reader() {
                 <p className="text-xs font-bold mb-3 opacity-60 uppercase tracking-wider">
                   테마
                 </p>
-                <div className="flex gap-2">
+                <div className="grid grid-cols-4 gap-2">
                   <button
                     onClick={() => setTheme("light")}
-                    className={`flex-1 p-3 rounded-lg border transition-all ${
+                    className={`p-3 rounded-lg border transition-all ${
                       theme === "light"
                         ? "border-amber-500 bg-amber-50 ring-1 ring-amber-500"
                         : "border-gray-200 hover:bg-gray-50"
                     } flex flex-col items-center gap-1`}
                   >
-                    <Sun className="w-5 h-5" />
-                    <span className="text-xs">라이트</span>
+                    <Sun className="w-4 h-4" />
+                    <span className="text-[10px]">라이트</span>
                   </button>
                   <button
                     onClick={() => setTheme("sepia")}
-                    className={`flex-1 p-3 rounded-lg border transition-all ${
+                    className={`p-3 rounded-lg border transition-all ${
                       theme === "sepia"
                         ? "border-amber-500 bg-[#f4ecd8] ring-1 ring-amber-500"
                         : "border-gray-200 hover:bg-gray-50"
                     } flex flex-col items-center gap-1`}
                   >
-                    <Coffee className="w-5 h-5" />
-                    <span className="text-xs">세피아</span>
+                    <Coffee className="w-4 h-4" />
+                    <span className="text-[10px]">세피아</span>
                   </button>
                   <button
                     onClick={() => setTheme("dark")}
-                    className={`flex-1 p-3 rounded-lg border transition-all ${
+                    className={`p-3 rounded-lg border transition-all ${
                       theme === "dark"
                         ? "border-amber-500 bg-gray-700 text-white ring-1 ring-amber-500"
                         : "border-gray-200 hover:bg-gray-50"
                     } flex flex-col items-center gap-1`}
                   >
-                    <Moon className="w-5 h-5" />
-                    <span className="text-xs">다크</span>
+                    <Moon className="w-4 h-4" />
+                    <span className="text-[10px]">다크</span>
+                  </button>
+                  <button
+                    onClick={() => setTheme("eink")}
+                    className={`p-3 rounded-lg border transition-all ${
+                      theme === "eink"
+                        ? "border-gray-900 bg-white ring-1 ring-gray-900"
+                        : "border-gray-200 hover:bg-gray-50"
+                    } flex flex-col items-center gap-1`}
+                  >
+                    <span className="w-4 h-4 flex items-center justify-center text-xs font-bold">E</span>
+                    <span className="text-[10px]">E-ink</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Read Mode */}
+              <div>
+                <p className="text-xs font-bold mb-3 opacity-60 uppercase tracking-wider">
+                  읽기 방식
+                </p>
+                <div className="flex gap-2 p-1 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                  <button
+                    onClick={() => setReadMode("page")}
+                    className={`flex-1 py-2 rounded-md text-xs font-medium flex items-center justify-center gap-1 transition-all ${
+                      readMode === "page"
+                        ? "bg-white dark:bg-gray-600 shadow-sm text-amber-600"
+                        : "text-gray-500"
+                    }`}
+                  >
+                    <ChevronLeft className="w-3 h-3" />페이지 넘김<ChevronRight className="w-3 h-3" />
+                  </button>
+                  <button
+                    onClick={() => setReadMode("scroll")}
+                    className={`flex-1 py-2 rounded-md text-xs font-medium flex items-center justify-center gap-1 transition-all ${
+                      readMode === "scroll"
+                        ? "bg-white dark:bg-gray-600 shadow-sm text-amber-600"
+                        : "text-gray-500"
+                    }`}
+                  >
+                    ↕ 스크롤
                   </button>
                 </div>
               </div>
@@ -686,17 +731,29 @@ export default function Reader() {
                   </span>
                 </div>
                 <div className="flex items-center gap-3 bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg">
-                  <Type className="w-4 h-4 opacity-50" />
+                  <button
+                    onClick={() => setFontSize((s) => Math.max(12, s - 2))}
+                    className="p-2 rounded-md bg-white dark:bg-gray-600 shadow-sm hover:bg-gray-100 transition-colors"
+                    aria-label="글자 작게"
+                  >
+                    <Type className="w-3 h-3" />
+                  </button>
                   <input
                     type="range"
-                    min="14"
-                    max="28"
+                    min="12"
+                    max="32"
                     step="1"
                     value={fontSize}
                     onChange={(e) => setFontSize(Number(e.target.value))}
                     className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-amber-500"
                   />
-                  <Type className="w-5 h-5 opacity-80" />
+                  <button
+                    onClick={() => setFontSize((s) => Math.min(32, s + 2))}
+                    className="p-2 rounded-md bg-white dark:bg-gray-600 shadow-sm hover:bg-gray-100 transition-colors"
+                    aria-label="글자 크게"
+                  >
+                    <Type className="w-5 h-5" />
+                  </button>
                 </div>
               </div>
 
@@ -762,85 +819,183 @@ export default function Reader() {
       <main className="flex-1 relative w-full h-full overflow-hidden flex items-center justify-center">
         {!isFullyReady && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-inherit">
-            <Loader2 className="w-10 h-10 animate-spin text-amber-500" />
+            <Loader2 className={`w-10 h-10 ${isEinkMode ? '' : 'animate-spin'} text-amber-500`} />
             <p className="font-serif text-sm">문서를 불러오는 중입니다...</p>
           </div>
         )}
 
-        <div
-          ref={containerRef}
-          className={`relative w-full h-full max-w-[1200px] mx-auto transition-all duration-300 ${
-            !isFullyReady ? "opacity-0" : "opacity-100"
-          }`}
-          style={{
-            paddingTop: isTwoPageMode ? "40px" : "20px",
-            paddingBottom: isTwoPageMode ? "40px" : "20px",
-          }}
-          onTouchStart={onTouchStart}
-          onTouchMove={onTouchMove}
-          onTouchEnd={onTouchEnd}
-        >
-          {/* Viewport mask */}
+        {readMode === "scroll" ? (
+          /* 스크롤 모드 */
           <div
-            className="h-full overflow-hidden mx-auto"
-            style={{
-              width: dimensions.width > 0 ? `${dimensions.width}px` : "100%",
-            }}
+            className={`w-full h-full overflow-y-auto px-4 md:px-8 py-8 max-w-[800px] mx-auto ${
+              !isFullyReady ? "opacity-0" : "opacity-100"
+            }`}
+            ref={containerRef}
           >
-            {/* Sliding content track */}
-            <motion.div
-              animate={{ x: -currentPage * stride }}
-              transition={{ type: "spring", stiffness: 300, damping: 30 }}
-              className="h-full"
+            <div className="mb-12 text-center">
+              <h2 className="text-2xl font-bold mb-4">{displayTitle}</h2>
+              <div className={`w-10 h-1 mx-auto opacity-50 ${isEinkMode ? 'bg-black' : 'bg-amber-500'}`}></div>
+            </div>
+            <div
+              ref={contentRef}
+              className="font-serif text-justify select-text"
               style={{
-                display: "flex",
-                width: "max-content",
-                backfaceVisibility: "hidden",
+                fontSize: `${fontSize}px`,
+                lineHeight: lineHeight,
               }}
             >
-              {/* CSS Columns Content */}
-              <div
-                ref={contentRef}
-                className="font-serif text-justify select-text"
-                style={{
-                  columnWidth: `${columnDimensions.colWidth}px`,
-                  columnGap: `${GAP_SIZE}px`,
-                  columnFill: "auto",
-                  height: `${columnDimensions.colHeight}px`,
-                  width:
-                    containerWidth !== null
-                      ? `${containerWidth}px`
-                      : "max-content",
-                  fontSize: `${fontSize}px`,
-                  lineHeight: lineHeight,
-                  boxSizing: "border-box",
-                  padding: 0,
-                  margin: 0,
-                }}
-              >
-                <div className="mb-12 text-center break-inside-avoid">
-                  <h2 className="text-2xl font-bold mb-4">{displayTitle}</h2>
-                  <div className="w-10 h-1 bg-amber-500 mx-auto opacity-50"></div>
-                </div>
-
-                {lines.map((line, idx) => (
-                  <p
-                    key={idx}
-                    data-line-index={idx}
-                    className="mb-6 break-inside-avoid"
-                    style={{ textIndent: "1em" }}
-                  >
-                    {line}
-                  </p>
-                ))}
-
-                <div className="h-[30vh] w-full break-inside-avoid flex items-center justify-center opacity-30">
-                  <p className="text-sm font-sans">- 끝 -</p>
-                </div>
-              </div>
-            </motion.div>
+              {lines.map((line, idx) => (
+                <p
+                  key={idx}
+                  className="mb-6"
+                  style={{ textIndent: "1em" }}
+                >
+                  {line}
+                </p>
+              ))}
+            </div>
+            <div className="h-20 flex items-center justify-center opacity-30">
+              <p className="text-sm font-sans">- 끝 -</p>
+            </div>
           </div>
-        </div>
+        ) : (
+          /* 페이지 넘김 모드 */
+          <div
+            ref={containerRef}
+            className={`relative w-full h-full max-w-[1200px] mx-auto ${
+              isEinkMode ? '' : 'transition-all duration-300'
+            } ${
+              !isFullyReady ? "opacity-0" : "opacity-100"
+            }`}
+            style={{
+              paddingTop: isTwoPageMode ? "40px" : "20px",
+              paddingBottom: isTwoPageMode ? "40px" : "20px",
+            }}
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onTouchEnd}
+          >
+            {/* 좌우 터치 영역 (페이지 넘김) */}
+            <div
+              className="absolute inset-y-0 left-0 w-1/3 z-10 cursor-pointer"
+              onClick={prevPage}
+              aria-label="이전 페이지"
+            />
+            <div
+              className="absolute inset-y-0 right-0 w-1/3 z-10 cursor-pointer"
+              onClick={nextPage}
+              aria-label="다음 페이지"
+            />
+
+            {/* Viewport mask */}
+            <div
+              className="h-full overflow-hidden mx-auto"
+              style={{
+                width: dimensions.width > 0 ? `${dimensions.width}px` : "100%",
+              }}
+            >
+              {/* Sliding content track */}
+              {isEinkMode ? (
+                <div
+                  className="h-full"
+                  style={{
+                    display: "flex",
+                    width: "max-content",
+                    backfaceVisibility: "hidden",
+                    transform: `translateX(${-currentPage * stride}px)`,
+                  }}
+                >
+                  <div
+                    ref={contentRef}
+                    className="font-serif text-justify select-text"
+                    style={{
+                      columnWidth: `${columnDimensions.colWidth}px`,
+                      columnGap: `${GAP_SIZE}px`,
+                      columnFill: "auto",
+                      height: `${columnDimensions.colHeight}px`,
+                      width:
+                        containerWidth !== null
+                          ? `${containerWidth}px`
+                          : "max-content",
+                      fontSize: `${fontSize}px`,
+                      lineHeight: lineHeight,
+                      boxSizing: "border-box",
+                      padding: 0,
+                      margin: 0,
+                    }}
+                  >
+                    <div className="mb-12 text-center break-inside-avoid">
+                      <h2 className="text-2xl font-bold mb-4">{displayTitle}</h2>
+                      <div className="w-10 h-1 bg-black mx-auto opacity-30"></div>
+                    </div>
+                    {lines.map((line, idx) => (
+                      <p
+                        key={idx}
+                        data-line-index={idx}
+                        className="mb-6 break-inside-avoid"
+                        style={{ textIndent: "1em" }}
+                      >
+                        {line}
+                      </p>
+                    ))}
+                    <div className="h-[30vh] w-full break-inside-avoid flex items-center justify-center opacity-30">
+                      <p className="text-sm font-sans">- 끝 -</p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <motion.div
+                  animate={{ x: -currentPage * stride }}
+                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  className="h-full"
+                  style={{
+                    display: "flex",
+                    width: "max-content",
+                    backfaceVisibility: "hidden",
+                  }}
+                >
+                  <div
+                    ref={contentRef}
+                    className="font-serif text-justify select-text"
+                    style={{
+                      columnWidth: `${columnDimensions.colWidth}px`,
+                      columnGap: `${GAP_SIZE}px`,
+                      columnFill: "auto",
+                      height: `${columnDimensions.colHeight}px`,
+                      width:
+                        containerWidth !== null
+                          ? `${containerWidth}px`
+                          : "max-content",
+                      fontSize: `${fontSize}px`,
+                      lineHeight: lineHeight,
+                      boxSizing: "border-box",
+                      padding: 0,
+                      margin: 0,
+                    }}
+                  >
+                    <div className="mb-12 text-center break-inside-avoid">
+                      <h2 className="text-2xl font-bold mb-4">{displayTitle}</h2>
+                      <div className="w-10 h-1 bg-amber-500 mx-auto opacity-50"></div>
+                    </div>
+                    {lines.map((line, idx) => (
+                      <p
+                        key={idx}
+                        data-line-index={idx}
+                        className="mb-6 break-inside-avoid"
+                        style={{ textIndent: "1em" }}
+                      >
+                        {line}
+                      </p>
+                    ))}
+                    <div className="h-[30vh] w-full break-inside-avoid flex items-center justify-center opacity-30">
+                      <p className="text-sm font-sans">- 끝 -</p>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Footer */}
