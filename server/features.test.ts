@@ -21,6 +21,8 @@ vi.mock("./db", () => ({
     return null;
   }),
   createBook: vi.fn().mockResolvedValue(3),
+  upsertBook: vi.fn().mockResolvedValue({ id: 3, isUpdate: false }),
+  getBookByTitleAuthor: vi.fn().mockResolvedValue(undefined),
   updateBook: vi.fn().mockResolvedValue(undefined),
   deleteBook: vi.fn().mockResolvedValue(undefined),
   getDonationInfo: vi.fn().mockResolvedValue({

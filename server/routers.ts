@@ -47,8 +47,8 @@ export const appRouter = router({
         googleDriveUrl: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
-        const id = await db.createBook(input);
-        return { id };
+        const { id, isUpdate } = await db.upsertBook(input);
+        return { id, isUpdate };
       }),
 
     update: adminProcedure

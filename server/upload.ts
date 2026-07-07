@@ -298,8 +298,8 @@ export function registerUploadRoutes(app: Express) {
         studyMaterial = await generateStudyMaterial(content, title, author);
       }
 
-      // 5. DB에 저장
-      const bookId = await db.createBook({
+      // 5. DB에 저장 (같은 제목+작가가 있으면 덮어쓰기)
+      const { id: bookId, isUpdate } = await db.upsertBook({
         title,
         author,
         genre,
@@ -312,6 +312,8 @@ export function registerUploadRoutes(app: Express) {
       return res.json({
         success: true,
         bookId,
+        isUpdate,
+        message: isUpdate ? `기존 도서 "${title}"을(를) 업데이트했습니다.` : `새 도서 "${title}"을(를) 등록했습니다.`,
         title,
         author,
         genre,

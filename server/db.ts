@@ -88,11 +88,30 @@ export async function getBookById(id: number) {
   return result.length > 0 ? result[0] : undefined;
 }
 
+export async function getBookByTitleAuthor(title: string, author: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(books).where(and(eq(books.title, title), eq(books.author, author))).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
 export async function createBook(data: { title: string; author: string; genre: "classic" | "modern" | "foreign"; content?: string; description?: string; youtubeUrl?: string; googleDriveUrl?: string; tableOfContents?: string; studyMaterial?: string }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const result = await db.insert(books).values(data).$returningId();
   return result[0].id;
+}
+
+// 같은 제목+작가의 도서가 있으면 업데이트, 없으면 새로 생성
+export async function upsertBook(data: { title: string; author: string; genre: "classic" | "modern" | "foreign"; content?: string; description?: string; youtubeUrl?: string; googleDriveUrl?: string; tableOfContents?: string; studyMaterial?: string }): Promise<{ id: number; isUpdate: boolean }> {
+  const existing = await getBookByTitleAuthor(data.title, data.author);
+  if (existing) {
+    await updateBook(existing.id, data);
+    return { id: existing.id, isUpdate: true };
+  } else {
+    const id = await createBook(data);
+    return { id, isUpdate: false };
+  }
 }
 
 export async function updateBook(id: number, data: Partial<{ title: string; author: string; genre: "classic" | "modern" | "foreign"; content: string; description: string; youtubeUrl: string; googleDriveUrl: string; tableOfContents: string; studyMaterial: string }>) {
