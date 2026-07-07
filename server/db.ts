@@ -88,14 +88,14 @@ export async function getBookById(id: number) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-export async function createBook(data: { title: string; author: string; genre: "classic" | "modern" | "foreign"; content?: string; description?: string; youtubeUrl?: string; googleDriveUrl?: string }) {
+export async function createBook(data: { title: string; author: string; genre: "classic" | "modern" | "foreign"; content?: string; description?: string; youtubeUrl?: string; googleDriveUrl?: string; tableOfContents?: string; studyMaterial?: string }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const result = await db.insert(books).values(data).$returningId();
   return result[0].id;
 }
 
-export async function updateBook(id: number, data: Partial<{ title: string; author: string; genre: "classic" | "modern" | "foreign"; content: string; description: string; youtubeUrl: string; googleDriveUrl: string }>) {
+export async function updateBook(id: number, data: Partial<{ title: string; author: string; genre: "classic" | "modern" | "foreign"; content: string; description: string; youtubeUrl: string; googleDriveUrl: string; tableOfContents: string; studyMaterial: string }>) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db.update(books).set(data).where(eq(books.id, id));

@@ -24,6 +24,9 @@ import {
   ArrowLeft,
   Download,
   Check,
+  List,
+  BookOpen,
+  X,
 } from "lucide-react";
 import { useOfflineCache } from "@/hooks/useOfflineCache";
 
@@ -85,6 +88,18 @@ export default function Reader() {
     () => content.split("\n").filter((l) => l.trim()),
     [content]
   );
+
+  // TOC & Study Material
+  const [showToc, setShowToc] = useState(false);
+  const [showStudyMaterial, setShowStudyMaterial] = useState(false);
+
+  const tocItems = useMemo(() => {
+    if (!book?.tableOfContents) return [];
+    return book.tableOfContents
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line && /^\d/.test(line));
+  }, [book?.tableOfContents]);
 
   // State
   const containerRef = useRef<HTMLDivElement>(null);
@@ -478,6 +493,24 @@ export default function Reader() {
         </div>
 
         <div className="flex items-center gap-1">
+          {tocItems.length > 0 && (
+            <button
+              onClick={() => { setShowToc(!showToc); setShowStudyMaterial(false); setShowSettings(false); }}
+              className={`p-2 hover:bg-black/5 rounded-full transition-colors ${showToc ? "text-amber-500" : ""}`}
+              title="차례"
+            >
+              <List className="w-5 h-5" />
+            </button>
+          )}
+          {book?.studyMaterial && (
+            <button
+              onClick={() => { setShowStudyMaterial(!showStudyMaterial); setShowToc(false); setShowSettings(false); }}
+              className={`p-2 hover:bg-black/5 rounded-full transition-colors ${showStudyMaterial ? "text-amber-500" : ""}`}
+              title="학습자료"
+            >
+              <BookOpen className="w-5 h-5" />
+            </button>
+          )}
           {user && (
             <button
               onClick={toggleBookmark}
@@ -509,13 +542,82 @@ export default function Reader() {
             )}
           </button>
           <button
-            onClick={() => setShowSettings(!showSettings)}
+            onClick={() => { setShowSettings(!showSettings); setShowToc(false); setShowStudyMaterial(false); }}
             className="p-2 hover:bg-black/5 rounded-full"
           >
             <Settings className="w-5 h-5" />
           </button>
         </div>
       </header>
+
+      {/* TOC Panel */}
+      <AnimatePresence>
+        {showToc && (
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            className={`absolute top-16 left-4 p-5 rounded-xl shadow-2xl border z-30 w-72 max-h-[70vh] overflow-y-auto ${
+              theme === "dark"
+                ? "bg-gray-800 border-gray-700 text-gray-100"
+                : "bg-white border-gray-100 text-gray-900"
+            }`}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-bold text-sm">📋 차례</h3>
+              <button onClick={() => setShowToc(false)} className="p-1 hover:bg-black/5 rounded">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="space-y-1">
+              {tocItems.map((item, idx) => {
+                // 차례 항목 클릭 시 해당 비율의 페이지로 이동
+                const targetPage = Math.floor((idx / tocItems.length) * totalPages);
+                return (
+                  <button
+                    key={idx}
+                    onClick={() => {
+                      setCurrentPage(Math.min(targetPage, totalPages - 1));
+                      setShowToc(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-amber-50 hover:text-amber-700 transition-colors ${
+                      theme === "dark" ? "hover:bg-gray-700 hover:text-amber-400" : ""
+                    }`}
+                  >
+                    {item}
+                  </button>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Study Material Panel */}
+      <AnimatePresence>
+        {showStudyMaterial && (
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            className={`absolute top-16 left-4 p-5 rounded-xl shadow-2xl border z-30 w-80 max-h-[70vh] overflow-y-auto ${
+              theme === "dark"
+                ? "bg-gray-800 border-gray-700 text-gray-100"
+                : "bg-white border-gray-100 text-gray-900"
+            }`}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-bold text-sm">📚 학습자료</h3>
+              <button onClick={() => setShowStudyMaterial(false)} className="p-1 hover:bg-black/5 rounded">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="text-sm leading-relaxed whitespace-pre-wrap">
+              {book?.studyMaterial || "학습자료가 없습니다."}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Settings Panel */}
       <AnimatePresence>

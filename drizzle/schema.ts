@@ -24,6 +24,9 @@ export const books = mysqlTable("books", {
   youtubeUrl: varchar("youtubeUrl", { length: 500 }),
   description: text("description"),
   googleDriveUrl: varchar("googleDriveUrl", { length: 1000 }),
+  tableOfContents: text("tableOfContents"),
+  studyMaterial: text("studyMaterial"),
+  audioUrl: varchar("audioUrl", { length: 1000 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

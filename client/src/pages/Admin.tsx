@@ -3,9 +3,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
 import { getLoginUrl } from "@/const";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useLocation } from "wouter";
-import { ChevronLeft, Plus, Trash2, Edit, Save, X } from "lucide-react";
+import { ChevronLeft, Plus, Trash2, Edit, Save, X, Upload, Sparkles, Loader2 } from "lucide-react";
 
 const GENRE_OPTIONS = [
   { value: "classic" as const, label: "고전" },
@@ -31,6 +31,15 @@ export default function Admin() {
   const [showAddBook, setShowAddBook] = useState(false);
   const [donationForm, setDonationForm] = useState<Record<string, string>>({});
   const [editingDonation, setEditingDonation] = useState(false);
+
+  // 파일 업로드 관련 상태
+  const [uploading, setUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState<any>(null);
+  const [uploadError, setUploadError] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // AI 분석 관련 상태
+  const [analyzingBookId, setAnalyzingBookId] = useState<number | null>(null);
 
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center"><p>로딩 중...</p></div>;
@@ -110,6 +119,63 @@ export default function Admin() {
     await deleteBook.mutateAsync({ id });
   };
 
+  // 파일 업로드 핸들러
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    setUploadError("");
+    setUploadResult(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch("/api/upload/book", {
+        method: "POST",
+        body: formData,
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        setUploadError(result.error || "업로드 실패");
+      } else {
+        setUploadResult(result);
+        utils.books.list.invalidate();
+      }
+    } catch (err: any) {
+      setUploadError(err.message || "업로드 중 오류가 발생했습니다.");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  // AI 분석 핸들러 (기존 도서에 차례/학습자료 생성)
+  const handleAIAnalyze = async (bookId: number) => {
+    if (!confirm("AI가 이 도서의 차례와 학습자료를 자동 생성합니다. 진행하시겠습니까?")) return;
+    
+    setAnalyzingBookId(bookId);
+    try {
+      const response = await fetch(`/api/upload/analyze/${bookId}`, {
+        method: "POST",
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        alert(`AI 분석 실패: ${result.error}`);
+      } else {
+        alert("AI 분석 완료! 차례와 학습자료가 생성되었습니다.");
+        utils.books.list.invalidate();
+      }
+    } catch (err: any) {
+      alert(`오류: ${err.message}`);
+    } finally {
+      setAnalyzingBookId(null);
+    }
+  };
+
   const startEditDonation = () => {
     setEditingDonation(true);
     setDonationForm({
@@ -142,6 +208,83 @@ export default function Admin() {
       </header>
 
       <div className="container py-8 space-y-8">
+        {/* File Upload Section */}
+        <section className="border border-border rounded-lg p-6 bg-card">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold">📁 파일로 도서 등록 (AI 자동 처리)</h2>
+          </div>
+          <p className="text-sm text-muted-foreground mb-4">
+            .docx 또는 .txt 파일을 업로드하면 AI가 자동으로 제목, 작가, 분류를 인식하고, 차례와 학습자료를 생성합니다.
+          </p>
+
+          <div className="flex items-center gap-3">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".docx,.txt"
+              onChange={handleFileUpload}
+              className="hidden"
+            />
+            <Button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="gap-2"
+            >
+              {uploading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  AI 처리 중...
+                </>
+              ) : (
+                <>
+                  <Upload className="w-4 h-4" />
+                  파일 업로드
+                </>
+              )}
+            </Button>
+            <span className="text-xs text-muted-foreground">.docx 또는 .txt (최대 50MB)</span>
+          </div>
+
+          {uploading && (
+            <div className="mt-4 p-4 bg-secondary/30 rounded-lg">
+              <div className="flex items-center gap-2 text-sm">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>AI가 도서 정보를 분석하고 차례/학습자료를 생성하고 있습니다... (30초~1분 소요)</span>
+              </div>
+            </div>
+          )}
+
+          {uploadError && (
+            <div className="mt-4 p-4 bg-destructive/10 border border-destructive/30 rounded-lg">
+              <p className="text-sm text-destructive">{uploadError}</p>
+            </div>
+          )}
+
+          {uploadResult && (
+            <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg space-y-2">
+              <p className="text-sm font-medium text-green-800">✅ 도서 등록 완료!</p>
+              <div className="text-sm space-y-1">
+                <p><strong>제목:</strong> {uploadResult.title}</p>
+                <p><strong>작가:</strong> {uploadResult.author}</p>
+                <p><strong>분류:</strong> {uploadResult.genre === "classic" ? "고전" : uploadResult.genre === "modern" ? "현대" : "해외"}</p>
+                <p><strong>작품소개:</strong> {uploadResult.description}</p>
+                {uploadResult.tableOfContents && (
+                  <details className="mt-2">
+                    <summary className="cursor-pointer text-green-700 font-medium">📋 생성된 차례 보기</summary>
+                    <pre className="mt-1 text-xs whitespace-pre-wrap bg-white p-2 rounded">{uploadResult.tableOfContents}</pre>
+                  </details>
+                )}
+                {uploadResult.studyMaterial && (
+                  <details className="mt-2">
+                    <summary className="cursor-pointer text-green-700 font-medium">📚 생성된 학습자료 미리보기</summary>
+                    <pre className="mt-1 text-xs whitespace-pre-wrap bg-white p-2 rounded">{uploadResult.studyMaterial}</pre>
+                  </details>
+                )}
+              </div>
+            </div>
+          )}
+        </section>
+
         {/* Donation Info Section */}
         <section className="border border-border rounded-lg p-6 bg-card">
           <div className="flex items-center justify-between mb-4">
@@ -209,13 +352,13 @@ export default function Admin() {
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold">도서 관리</h2>
             <Button size="sm" onClick={() => { setShowAddBook(true); setBookForm({ title: "", author: "", genre: "classic", content: "", description: "", youtubeUrl: "", googleDriveUrl: "" }); }}>
-              <Plus className="w-4 h-4 mr-1" /> 도서 추가
+              <Plus className="w-4 h-4 mr-1" /> 수동 추가
             </Button>
           </div>
 
           {showAddBook && (
             <div className="border border-border rounded p-4 mb-4 bg-secondary/30 space-y-3">
-              <h3 className="font-medium">새 도서 추가</h3>
+              <h3 className="font-medium">새 도서 수동 추가</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <Input placeholder="제목" value={bookForm.title} onChange={(e) => setBookForm({ ...bookForm, title: e.target.value })} />
                 <Input placeholder="작가" value={bookForm.author} onChange={(e) => setBookForm({ ...bookForm, author: e.target.value })} />
@@ -312,10 +455,24 @@ export default function Admin() {
                         <span className="font-medium">{book.title}</span>
                         <span className="text-muted-foreground ml-2">— {book.author}</span>
                         {book.googleDriveUrl && (
-                          <span className="ml-2 text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-700">Google Drive 연결</span>
+                          <span className="ml-2 text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-700">Drive</span>
                         )}
                       </div>
                       <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-purple-600 hover:text-purple-800"
+                          onClick={() => handleAIAnalyze(book.id)}
+                          disabled={analyzingBookId === book.id}
+                          title="AI 분석 (차례/학습자료 생성)"
+                        >
+                          {analyzingBookId === book.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Sparkles className="w-4 h-4" />
+                          )}
+                        </Button>
                         <Button variant="ghost" size="sm" onClick={() => startEditBook(book)}>
                           <Edit className="w-4 h-4" />
                         </Button>
