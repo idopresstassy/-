@@ -1,0 +1,24 @@
+{
+  "name": "명작무료책방",
+  "short_name": "명작무료책방",
+  "description": "한국 문학 명작을 무료로 읽을 수 있는 온라인 도서관",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1a2744",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/manus-storage/icon-192_754af1f8.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/manus-storage/icon-512_47b6018d.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

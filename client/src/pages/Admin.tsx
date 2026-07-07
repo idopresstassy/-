@@ -625,7 +625,7 @@ function EmailTab() {
           <div>
             <label className="text-sm font-medium mb-1 block">메일 제목</label>
             <Input
-              placeholder="예: 이도 명작도서관 신간 안내"
+              placeholder="예: 명작무료책방 신간 안내"
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
             />

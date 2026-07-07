@@ -1,23 +1,41 @@
-// Service Worker for offline book caching
-const CACHE_NAME = "book-cache-v1";
+// Service Worker for PWA + offline book caching
+const CACHE_NAME = "book-cache-v2";
+const STATIC_CACHE_NAME = "static-cache-v1";
 const BOOK_CACHE_PREFIX = "book-content-";
 
-// Install event
+const STATIC_ASSETS = [
+  '/',
+  '/manifest.json',
+];
+
+// Install event - cache static assets
 self.addEventListener("install", (event) => {
+  event.waitUntil(
+    caches.open(STATIC_CACHE_NAME).then((cache) => {
+      return cache.addAll(STATIC_ASSETS);
+    })
+  );
   self.skipWaiting();
 });
 
-// Activate event
+// Activate event - clean old caches
 self.addEventListener("activate", (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    caches.keys().then((keys) => {
+      return Promise.all(
+        keys.filter((key) => key !== CACHE_NAME && key !== STATIC_CACHE_NAME)
+          .map((key) => caches.delete(key))
+      );
+    })
+  );
+  self.clients.claim();
 });
 
-// Listen for messages from the main thread
+// Listen for messages from the main thread (book caching)
 self.addEventListener("message", async (event) => {
   const { type, payload } = event.data;
 
   if (type === "CACHE_BOOK") {
-    // Cache book content for offline reading
     const { bookId, content, title, author } = payload;
     const cache = await caches.open(CACHE_NAME);
     const cacheKey = `${BOOK_CACHE_PREFIX}${bookId}`;
@@ -25,7 +43,6 @@ self.addEventListener("message", async (event) => {
       headers: { "Content-Type": "application/json" },
     });
     await cache.put(new Request(cacheKey), response);
-    // Notify client
     event.source.postMessage({ type: "BOOK_CACHED", payload: { bookId } });
   }
 
@@ -77,20 +94,42 @@ self.addEventListener("message", async (event) => {
   }
 });
 
-// Fetch event - serve cached book content when offline
+// Fetch event - network first with static cache fallback
 self.addEventListener("fetch", (event) => {
-  // Only intercept tRPC book content requests when offline
-  if (event.request.url.includes("/api/trpc/books.fetchGoogleDriveContent") || 
-      event.request.url.includes("/api/trpc/books.getById")) {
-    event.respondWith(
-      fetch(event.request).catch(async () => {
-        // Network failed, try to serve from cache
-        // This is a fallback - main offline reading uses direct cache messaging
-        return new Response(JSON.stringify({ error: "offline" }), {
-          status: 503,
-          headers: { "Content-Type": "application/json" },
-        });
-      })
-    );
+  const { request } = event;
+  const url = new URL(request.url);
+
+  // Skip non-GET requests
+  if (request.method !== 'GET') return;
+
+  // API requests - network only (with offline fallback for book content)
+  if (url.pathname.startsWith('/api/')) {
+    if (url.pathname.includes("/api/trpc/books.fetchGoogleDriveContent") || 
+        url.pathname.includes("/api/trpc/books.getById")) {
+      event.respondWith(
+        fetch(request).catch(async () => {
+          return new Response(JSON.stringify({ error: "offline" }), {
+            status: 503,
+            headers: { "Content-Type": "application/json" },
+          });
+        })
+      );
+    }
+    return;
   }
+
+  // Static assets - stale-while-revalidate
+  event.respondWith(
+    caches.open(STATIC_CACHE_NAME).then(async (cache) => {
+      const cachedResponse = await cache.match(request);
+      const fetchPromise = fetch(request).then((networkResponse) => {
+        if (networkResponse.ok && networkResponse.type === 'basic') {
+          cache.put(request, networkResponse.clone());
+        }
+        return networkResponse;
+      }).catch(() => cachedResponse);
+
+      return cachedResponse || fetchPromise;
+    })
+  );
 });

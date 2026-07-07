@@ -48,8 +48,8 @@ export default function Home() {
           {/* Top row: Logo */}
           <div className="flex items-center justify-center py-2">
             <Link href="/" className="flex items-center gap-2">
-              <img src="/manus-storage/logo_d34d7a80.png" alt="문학도서관 로고" className="w-10 h-10 rounded-full" />
-              <h1 className="text-2xl font-bold text-foreground font-serif">이도 명작도서관</h1>
+              <img src="/manus-storage/logo-icon_f82cb12d.png" alt="명작무료책방 로고" className="w-10 h-10 rounded-full" />
+              <h1 className="text-2xl font-bold text-foreground font-serif">명작무료책방</h1>
             </Link>
           </div>
           {/* Bottom row: Navigation */}
@@ -91,7 +91,7 @@ export default function Home() {
       {/* Announcement Banner */}
       <div className="bg-secondary/70 border-b border-border">
         <div className="container py-2 text-center">
-          <p className="text-sm text-foreground">이도 명작도서관은 여러분의 후원과 구독으로 운영됩니다</p>
+          <p className="text-sm text-foreground">명작무료책방은 여러분의 후원과 구독으로 운영됩니다</p>
         </div>
       </div>
 
