@@ -144,15 +144,10 @@ export default function Home() {
             {books.map((book) => (
               <div key={book.id} className="border border-border rounded-lg p-5 bg-card hover:shadow-md transition-shadow">
                 <div className="flex items-start justify-between mb-2">
-                  <span className="text-xs px-2 py-0.5 rounded bg-secondary text-secondary-foreground">
-                    {book.genre === "classic" ? "고전" : book.genre === "modern" ? "현대" : "해외"}
-                  </span>
                   <div className="flex items-center gap-2">
-                    {book.youtubeUrl && (
-                      <a href={book.youtubeUrl} target="_blank" rel="noopener noreferrer" className="text-red-500 hover:text-red-600">
-                        <Youtube className="w-5 h-5" />
-                      </a>
-                    )}
+                    <span className="text-xs px-2 py-0.5 rounded bg-secondary text-secondary-foreground">
+                      {book.genre === "classic" ? "고전" : book.genre === "modern" ? "현대" : "해외"}
+                    </span>
                     <span className="text-sm text-muted-foreground">{book.author}</span>
                   </div>
                 </div>
@@ -160,9 +155,16 @@ export default function Home() {
                 {book.description && (
                   <p className="text-sm text-muted-foreground mb-3">{book.description}</p>
                 )}
-                <Link href={`/read/${book.id}`} className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium transition-all disabled:pointer-events-none disabled:opacity-50 border bg-transparent shadow-xs hover:bg-accent hover:text-accent-foreground h-8 rounded-md px-3 text-xs w-full">
-                    <BookOpen className="w-4 h-4" /> 읽기
-                </Link>
+                <div className="flex gap-2">
+                  <Link href={`/read/${book.id}`} className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium transition-all disabled:pointer-events-none disabled:opacity-50 border bg-transparent shadow-xs hover:bg-accent hover:text-accent-foreground h-8 rounded-md px-3 text-xs flex-1">
+                      <BookOpen className="w-4 h-4" /> 읽기
+                  </Link>
+                  {book.youtubeUrl && (
+                    <a href={book.youtubeUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-1 whitespace-nowrap font-medium transition-all border bg-transparent shadow-xs hover:bg-red-50 hover:text-red-600 text-red-500 h-8 rounded-md px-3 text-xs">
+                      <Youtube className="w-4 h-4" /> 오디오북 듣기
+                    </a>
+                  )}
+                </div>
               </div>
             ))}
           </div>
