@@ -110,7 +110,7 @@ export default function Home() {
             </Button>
           </form>
           <Button variant="outline" size="sm" onClick={() => setShowBookList(true)}>
-            <List className="w-4 h-4 mr-1" /> 전체목록({allBooks?.length || 0})
+            <List className="w-4 h-4 mr-1" /> <span className="sm:hidden">목록</span><span className="hidden sm:inline">전체목록({allBooks?.length || 0})</span>
           </Button>
         </div>
       </div>
