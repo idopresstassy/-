@@ -1,97 +1,241 @@
-"use client";
+bject
+	 * @param {string} path context path
+	 * @param {string} request request string
+	 * @param {ResolveContext=} resolveContext resolve context
+	 * @returns {Promise<string | false>} result
+	 */
+	/**
+	 * @param {Context | string} context context information object or context path when no context is provided
+	 * @param {string | ResolveContext=} path context path or resolve context when no context is provided
+	 * @param {string | ResolveContext=} request request string or resolve context when no context is provided
+	 * @param {ResolveContext=} resolveContext resolve context
+	 * @returns {Promise<string | false>} result
+	 */
+	resolvePromise(context, path, request, resolveContext) {
+		// `|| {}` ensures the 5-arg fast path inside `resolve()` is reached
+		// even when the caller doesn't pass a resolveContext.
+		return _withResolvers(
+			this,
+			/** @type {Context} */ (context),
+			/** @type {string} */ (path),
+			/** @type {string} */ (request),
+			/** @type {ResolveContext} */ (resolveContext) || {},
+		);
+	}
 
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { User, Session } from "@supabase/supabase-js";
-import { supabase } from "./supabase";
+	/**
+	 * @overload
+	 * @param {string} path context path
+	 * @param {string} request request string
+	 * @param {ResolveCallback} callback callback function
+	 * @returns {void}
+	 */
+	/**
+	 * @overload
+	 * @param {string} path context path
+	 * @param {string} request request string
+	 * @param {ResolveContext} resolveContext resolve context
+	 * @param {ResolveCallback} callback callback function
+	 * @returns {void}
+	 */
+	/**
+	 * @overload
+	 * @param {Context} context context information object
+	 * @param {string} path context path
+	 * @param {string} request request string
+	 * @param {ResolveCallback} callback callback function
+	 * @returns {void}
+	 */
+	/**
+	 * @overload
+	 * @param {Context} context context information object
+	 * @param {string} path context path
+	 * @param {string} request request string
+	 * @param {ResolveContext} resolveContext resolve context
+	 * @param {ResolveCallback} callback callback function
+	 * @returns {void}
+	 */
+	/**
+	 * @param {Context | string} context context information object or context path when no context is provided
+	 * @param {string | ResolveContext | ResolveCallback=} path context path or (when no context) resolve context or callback
+	 * @param {string | ResolveContext | ResolveCallback=} request request string or (when no context) resolve context or callback
+	 * @param {ResolveContext | ResolveCallback=} resolveContext resolve context or callback when no resolve context is provided
+	 * @param {ResolveCallback=} callback callback function
+	 * @returns {void}
+	 */
+	resolve(context, path, request, resolveContext, callback) {
+		// Fast path for the common 5-arg call (`resolver.resolve(ctx, from,
+		// req, resolveCtx, cb)`) — every call from `resolveSync` /
+		// `resolvePromise` plus the vast majority of direct API callers.
+		// PR #536 added runtime overload-shifting to support optional
+		// `context` / `resolveContext`; that adds several `typeof` checks
+		// per resolve which show up as a measurable instruction-count
+		// regression on every benchmark that calls into this method. Skip
+		// the shifting entirely when all 5 args are already well-typed.
+		if (
+			typeof callback === "function" &&
+			typeof context === "object" &&
+			context !== null &&
+			typeof resolveContext === "object" &&
+			resolveContext !== null
+		) {
+			// proceed straight to per-arg validation below
+		} else {
+			// Slow path: shift positional args based on what was supplied.
+			// Shift when context is omitted (first positional arg is the path string).
+			if (typeof context === "string") {
+				// Keep an already-supplied callback (resolveSync / resolvePromise
+				// always pass one in the 5th position).
+				if (typeof callback !== "function") {
+					callback = /** @type {ResolveCallback | undefined} */ (
+						resolveContext
+					);
+				}
+				resolveContext =
+					/** @type {ResolveContext | ResolveCallback | undefined} */ (request);
+				request = /** @type {string} */ (path);
+				path = context;
+				context = {};
+			}
+			// 4-arg form: the resolveContext slot holds the callback.
+			if (typeof resolveContext === "function") {
+				callback = resolveContext;
+				resolveContext = {};
+			} else if (!resolveContext || typeof resolveContext !== "object") {
+				resolveContext = {};
+			}
+			if (typeof callback !== "function") {
+				throw new TypeError("callback argument is not a function");
+			}
+			if (!context || typeof context !== "object") {
+				context = {};
+			}
+		}
+		if (typeof path !== "string") {
+			return callback(new Error("path argument is not a string"));
+		}
+		if (typeof request !== "string") {
+			return callback(new Error("request argument is not a string"));
+		}
 
-interface AuthState {
-  user: User | null;
-  session: Session | null;
-  role: string | null;
-  isAdmin: boolean;
-  isLoading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: string | null }>;
-  signUp: (email: string, password: string) => Promise<{ error: string | null }>;
-  signOut: () => Promise<void>;
-}
+		/** @type {ResolveRequest} */
+		const obj = {
+			context,
+			path,
+			request,
+		};
 
-const AuthContext = createContext<AuthState | undefined>(undefined);
+		/** @type {ResolveContextYield | undefined} */
+		let yield_;
+		let yieldCalled = false;
+		/** @type {ResolveContextYield | undefined} */
+		let finishYield;
+		if (typeof resolveContext.yield === "function") {
+			const old = resolveContext.yield;
+			/**
+			 * @param {ResolveRequest} obj object
+			 */
+			yield_ = (obj) => {
+				old(obj);
+				yieldCalled = true;
+			};
+			/**
+			 * @param {ResolveRequest} result result
+			 * @returns {void}
+			 */
+			finishYield = (result) => {
+				if (result) {
+					/** @type {ResolveContextYield} */ (yield_)(result);
+				}
+				callback(null);
+			};
+		}
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [role, setRole] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+		const message = `resolve '${request}' in '${path}'`;
 
-  const fetchRole = async (userId: string) => {
-    const { data } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", userId)
-      .single();
-    setRole(data?.role ?? "user");
-  };
+		/**
+		 * @param {ResolveRequest} result result
+		 * @returns {void}
+		 */
+		const finishResolved = (result) => {
+			const resultPath = result.path;
+			if (resultPath === false) return callback(null, false, result);
+			const escapedPath = resultPath.includes("#")
+				? resultPath.replace(HASH_ESCAPE_RE, "\0#")
+				: resultPath;
+			const resultQuery = result.query;
+			let escapedQuery;
+			if (resultQuery) {
+				escapedQuery = resultQuery.includes("#")
+					? resultQuery.replace(HASH_ESCAPE_RE, "\0#")
+					: resultQuery;
+			} else {
+				escapedQuery = "";
+			}
+			return callback(
+				null,
+				`${escapedPath}${escapedQuery}${result.fragment || ""}`,
+				result,
+			);
+		};
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
-      setSession(s);
-      setUser(s?.user ?? null);
-      if (s?.user) {
-        fetchRole(s.user.id);
-      }
-      setIsLoading(false);
-    });
+		/**
+		 * @param {string[]} log logs
+		 * @returns {void}
+		 */
+		const finishWithoutResolve = (log) => {
+			/**
+			 * @type {ErrorWithDetail}
+			 */
+			const error = new Error(`Can't ${message}`);
+			error.details = log.join("\n");
+			this.hooks.noResolve.call(obj, error);
+			return callback(error);
+		};
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, s) => {
-        setSession(s);
-        setUser(s?.user ?? null);
-        if (s?.user) {
-          fetchRole(s.user.id);
-        } else {
-          setRole(null);
-        }
-      }
-    );
+		if (resolveContext.log) {
+			// We need log anyway to capture it in case of an error
+			const parentLog = resolveContext.log;
+			/** @type {string[]} */
+			const log = [];
+			return this.doResolve(
+				this.hooks.resolve,
+				obj,
+				message,
+				{
+					log: (msg) => {
+						parentLog(msg);
+						log.push(msg);
+					},
+					yield: yield_,
+					fileDependencies: resolveContext.fileDependencies,
+					contextDependencies: resolveContext.contextDependencies,
+					missingDependencies: resolveContext.missingDependencies,
+					stack: resolveContext.stack,
+				},
+				(err, result) => {
+					if (err) return callback(err);
 
-    return () => subscription.unsubscribe();
-  }, []);
+					if (yieldCalled || (result && yield_)) {
+						return /** @type {ResolveContextYield} */ (finishYield)(
+							/** @type {ResolveRequest} */ (result),
+						);
+					}
 
-  const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error?.message ?? null };
-  };
+					if (result) return finishResolved(result);
 
-  const signUp = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({ email, password });
-    return { error: error?.message ?? null };
-  };
-
-  const signOut = async () => {
-    await supabase.auth.signOut();
-    setRole(null);
-  };
-
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        session,
-        role,
-        isAdmin: role === "admin",
-        isLoading,
-        signIn,
-        signUp,
-        signOut,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  );
-}
-
-export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
-  return ctx;
-}
+					return finishWithoutResolve(log);
+				},
+			);
+		}
+		// Try to resolve assuming there is no error
+		// We don't log stuff in this case
+		return this.doResolve(
+			this.hooks.resolve,
+			obj,
+			message,
+			{
+				log: undefined,
+				yield: yield_,
+				fileDependencies: resolveContext.fileDependencies,
+		

@@ -1,15 +1,16 @@
-import { defineConfig } from "drizzle-kit";
+/*
+	MIT License http://www.opensource.org/licenses/mit-license.php
+	Author Tobias Koppers @sokra
+*/
 
-const connectionString = process.env.DATABASE_URL;
-if (!connectionString) {
-  throw new Error("DATABASE_URL is required to run drizzle commands");
-}
+"use strict";
 
-export default defineConfig({
-  schema: "./drizzle/schema.ts",
-  out: "./drizzle",
-  dialect: "mysql",
-  dbCredentials: {
-    url: connectionString,
-  },
-});
+/** @typedef {import("./Resolver")} Resolver */
+/** @typedef {import("./Resolver").ResolveRequest} ResolveRequest */
+/** @typedef {import("./Resolver").ResolveStepHook} ResolveStepHook */
+
+module.exports = class ParsePlugin {
+	/**
+	 * @param {string | ResolveStepHook} source source
+	 * @param {Partial<ResolveRequest>} requestOptions request options
+	 * @param 

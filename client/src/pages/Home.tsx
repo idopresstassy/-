@@ -110,7 +110,7 @@ export default function Home() {
             </Button>
           </form>
           <Button variant="outline" size="sm" onClick={() => setShowBookList(true)}>
-            <List className="w-4 h-4 mr-1" /> 전체목록
+            <List className="w-4 h-4 mr-1" /> 전체목록({allBooks?.length || 0})
           </Button>
         </div>
       </div>
@@ -209,7 +209,7 @@ export default function Home() {
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50" onClick={() => setShowBookList(false)}>
           <div className="bg-card rounded-lg shadow-xl w-full max-w-lg mx-4 max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
-              <h3 className="text-lg font-bold font-serif text-foreground">전체 목록</h3>
+              <h3 className="text-lg font-bold font-serif text-foreground">전체 목록 <span className="text-sm font-normal text-muted-foreground">({allBooks?.length || 0}권)</span></h3>
               <button onClick={() => setShowBookList(false)} className="p-1 hover:bg-secondary rounded">
                 <X className="w-5 h-5" />
               </button>

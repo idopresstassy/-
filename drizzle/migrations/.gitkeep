@@ -1,0 +1,12 @@
+d=} encoding encoding
+ */
+
+/**
+ * @typedef {ObjectEncodingOptions | BufferEncoding | undefined | null} EncodingOption
+ */
+
+/** @typedef {(err: NodeJS.ErrnoException | null, result?: string) => void} StringCallback */
+/** @typedef {(err: NodeJS.ErrnoException | null, result?: Buffer) => void} BufferCallback */
+/** @typedef {(err: NodeJS.ErrnoException | null, result?: (string | Buffer)) => void} StringOrBufferCallback */
+/** @typedef {(err: NodeJS.ErrnoException | null, result?: IStats) => void} StatsCallback */
+/** @typedef {(err: NodeJS.ErrnoExceptio
