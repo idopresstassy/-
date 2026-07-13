@@ -924,21 +924,21 @@ export default function Reader() {
                       margin: 0,
                     }}
                   >
-                    <div className="mb-12 text-center break-inside-avoid">
-                      <h2 className="text-2xl font-bold mb-4">{displayTitle}</h2>
+                    <div className="mb-4 sm:mb-8 text-center">
+                      <h2 className="text-xl sm:text-2xl font-bold mb-2 sm:mb-4">{displayTitle}</h2>
                       <div className="w-10 h-1 bg-black mx-auto opacity-30"></div>
                     </div>
                     {lines.map((line, idx) => (
                       <p
                         key={idx}
                         data-line-index={idx}
-                        className="mb-6 break-inside-avoid"
+                        className="mb-4 sm:mb-6 break-inside-avoid"
                         style={{ textIndent: "1em" }}
                       >
                         {line}
                       </p>
                     ))}
-                    <div className="h-[30vh] w-full break-inside-avoid flex items-center justify-center opacity-30">
+                    <div className="h-[15vh] sm:h-[30vh] w-full break-inside-avoid flex items-center justify-center opacity-30">
                       <p className="text-sm font-sans">- 끝 -</p>
                     </div>
                   </div>
@@ -973,21 +973,21 @@ export default function Reader() {
                       margin: 0,
                     }}
                   >
-                    <div className="mb-12 text-center break-inside-avoid">
-                      <h2 className="text-2xl font-bold mb-4">{displayTitle}</h2>
+                    <div className="mb-4 sm:mb-8 text-center">
+                      <h2 className="text-xl sm:text-2xl font-bold mb-2 sm:mb-4">{displayTitle}</h2>
                       <div className="w-10 h-1 bg-amber-500 mx-auto opacity-50"></div>
                     </div>
                     {lines.map((line, idx) => (
                       <p
                         key={idx}
                         data-line-index={idx}
-                        className="mb-6 break-inside-avoid"
+                        className="mb-4 sm:mb-6 break-inside-avoid"
                         style={{ textIndent: "1em" }}
                       >
                         {line}
                       </p>
                     ))}
-                    <div className="h-[30vh] w-full break-inside-avoid flex items-center justify-center opacity-30">
+                    <div className="h-[15vh] sm:h-[30vh] w-full break-inside-avoid flex items-center justify-center opacity-30">
                       <p className="text-sm font-sans">- 끝 -</p>
                     </div>
                   </div>
