@@ -155,7 +155,7 @@ export default function Home() {
                 {book.description && (
                   <p className="text-sm text-muted-foreground mb-3">{book.description}</p>
                 )}
-                <div className="flex flex-col sm:flex-row gap-2">
+                <div className="flex flex-row gap-2">
                   <Link href={`/read/${book.id}`} className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium transition-all disabled:pointer-events-none disabled:opacity-50 border bg-transparent shadow-xs hover:bg-accent hover:text-accent-foreground h-8 rounded-md px-3 text-xs flex-1">
                       <BookOpen className="w-4 h-4" /> 읽기
                   </Link>
