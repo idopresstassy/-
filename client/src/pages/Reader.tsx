@@ -932,13 +932,13 @@ export default function Reader() {
                       <p
                         key={idx}
                         data-line-index={idx}
-                        className="mb-4 sm:mb-6 break-inside-avoid"
+                        className="mb-4 sm:mb-6"
                         style={{ textIndent: "1em" }}
                       >
                         {line}
                       </p>
                     ))}
-                    <div className="h-[15vh] sm:h-[30vh] w-full break-inside-avoid flex items-center justify-center opacity-30">
+                    <div className="h-8 w-full flex items-center justify-center opacity-30">
                       <p className="text-sm font-sans">- 끝 -</p>
                     </div>
                   </div>
@@ -981,13 +981,13 @@ export default function Reader() {
                       <p
                         key={idx}
                         data-line-index={idx}
-                        className="mb-4 sm:mb-6 break-inside-avoid"
+                        className="mb-4 sm:mb-6"
                         style={{ textIndent: "1em" }}
                       >
                         {line}
                       </p>
                     ))}
-                    <div className="h-[15vh] sm:h-[30vh] w-full break-inside-avoid flex items-center justify-center opacity-30">
+                    <div className="h-8 w-full flex items-center justify-center opacity-30">
                       <p className="text-sm font-sans">- 끝 -</p>
                     </div>
                   </div>
