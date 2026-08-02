@@ -249,6 +249,39 @@ export async function getTodayVisitorCount() {
   return result[0]?.count || 0;
 }
 
+export async function getWeeklyVisitorCount() {
+  const db = await getDb();
+  if (!db) return 0;
+  const weekAgo = new Date();
+  weekAgo.setDate(weekAgo.getDate() - 7);
+  weekAgo.setHours(0, 0, 0, 0);
+  const result = await db.select({ count: sql<number>`COUNT(DISTINCT COALESCE(sessionId, id))` }).from(visits)
+    .where(gte(visits.visitedAt, weekAgo));
+  return result[0]?.count || 0;
+}
+
+export async function getMonthlyVisitorCount() {
+  const db = await getDb();
+  if (!db) return 0;
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+  const result = await db.select({ count: sql<number>`COUNT(DISTINCT COALESCE(sessionId, id))` }).from(visits)
+    .where(gte(visits.visitedAt, monthStart));
+  return result[0]?.count || 0;
+}
+
+export async function getYearlyVisitorCount() {
+  const db = await getDb();
+  if (!db) return 0;
+  const yearStart = new Date();
+  yearStart.setMonth(0, 1);
+  yearStart.setHours(0, 0, 0, 0);
+  const result = await db.select({ count: sql<number>`COUNT(DISTINCT COALESCE(sessionId, id))` }).from(visits)
+    .where(gte(visits.visitedAt, yearStart));
+  return result[0]?.count || 0;
+}
+
 export async function getPopularBooks(limit = 10) {
   const db = await getDb();
   if (!db) return [];

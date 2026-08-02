@@ -5,7 +5,7 @@ import { trpc } from "@/lib/trpc";
 import { getLoginUrl } from "@/const";
 import { useState, useRef, useMemo } from "react";
 import { useLocation } from "wouter";
-import { ChevronLeft, Plus, Trash2, Edit, Save, X, Upload, Sparkles, Loader2, Users, BarChart3, BookOpen, Mail, Send } from "lucide-react";
+import { ChevronLeft, Plus, Trash2, Edit, Save, X, Upload, Sparkles, Loader2, Users, BarChart3, BookOpen, Mail, Send, Calendar, TrendingUp } from "lucide-react";
 
 const GENRE_OPTIONS = [
   { value: "classic" as const, label: "고전" },
@@ -143,6 +143,45 @@ function DashboardTab() {
             <div>
               <p className="text-sm text-muted-foreground">인기 도서 1위</p>
               <p className="text-lg font-bold truncate">{stats?.popularBooks?.[0]?.title ?? "-"}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Visitor Period Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="border border-border rounded-lg p-6 bg-card">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-cyan-100 flex items-center justify-center">
+              <Calendar className="w-5 h-5 text-cyan-600" />
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">주간 방문자 (7일)</p>
+              <p className="text-2xl font-bold">{stats?.weeklyVisitors ?? 0}명</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="border border-border rounded-lg p-6 bg-card">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center">
+              <TrendingUp className="w-5 h-5 text-orange-600" />
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">월별 방문자 (이번 달)</p>
+              <p className="text-2xl font-bold">{stats?.monthlyVisitors ?? 0}명</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="border border-border rounded-lg p-6 bg-card">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center">
+              <BarChart3 className="w-5 h-5 text-rose-600" />
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">연별 방문자 (올해)</p>
+              <p className="text-2xl font-bold">{stats?.yearlyVisitors ?? 0}명</p>
             </div>
           </div>
         </div>

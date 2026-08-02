@@ -166,12 +166,15 @@ export const appRouter = router({
   // ==================== ADMIN ====================
   admin: router({
     stats: adminProcedure.query(async () => {
-      const [totalUsers, todayVisitors, popularBooks] = await Promise.all([
+      const [totalUsers, todayVisitors, weeklyVisitors, monthlyVisitors, yearlyVisitors, popularBooks] = await Promise.all([
         db.getTotalUserCount(),
         db.getTodayVisitorCount(),
+        db.getWeeklyVisitorCount(),
+        db.getMonthlyVisitorCount(),
+        db.getYearlyVisitorCount(),
         db.getPopularBooks(10),
       ]);
-      return { totalUsers, todayVisitors, popularBooks };
+      return { totalUsers, todayVisitors, weeklyVisitors, monthlyVisitors, yearlyVisitors, popularBooks };
     }),
 
     users: adminProcedure.query(async () => {
