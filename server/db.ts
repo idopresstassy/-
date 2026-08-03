@@ -98,7 +98,19 @@ export async function getBookByTitleAuthor(title: string, author: string) {
 export async function createBook(data: { title: string; author: string; genre: "classic" | "modern" | "foreign"; content?: string; description?: string; youtubeUrl?: string; googleDriveUrl?: string; tableOfContents?: string; studyMaterial?: string }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const result = await db.insert(books).values(data).$returningId();
+  // Explicitly set all optional fields to null if undefined to prevent Drizzle from using 'default'
+  const values = {
+    title: data.title,
+    author: data.author,
+    genre: data.genre,
+    content: data.content ?? null,
+    youtubeUrl: data.youtubeUrl ?? null,
+    description: data.description ?? null,
+    googleDriveUrl: data.googleDriveUrl ?? null,
+    tableOfContents: data.tableOfContents ?? null,
+    studyMaterial: data.studyMaterial ?? null,
+  };
+  const result = await db.insert(books).values(values).$returningId();
   return result[0].id;
 }
 

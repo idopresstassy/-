@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { int, mediumtext, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
 
 export const users = mysqlTable("users", {
   id: int("id").autoincrement().primaryKey(),
@@ -20,7 +20,7 @@ export const books = mysqlTable("books", {
   title: varchar("title", { length: 500 }).notNull(),
   author: varchar("author", { length: 200 }).notNull(),
   genre: mysqlEnum("genre", ["classic", "modern", "foreign"]).notNull(),
-  content: text("content"),
+  content: mediumtext("content"),
   youtubeUrl: varchar("youtubeUrl", { length: 500 }),
   description: text("description"),
   googleDriveUrl: varchar("googleDriveUrl", { length: 1000 }),

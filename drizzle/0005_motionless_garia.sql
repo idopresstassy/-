@@ -1,0 +1,1 @@
+ALTER TABLE `books` MODIFY COLUMN `content` mediumtext;

@@ -323,7 +323,16 @@ export function registerUploadRoutes(app: Express) {
       });
     } catch (error: any) {
       console.error("[Upload] Error:", error);
-      return res.status(500).json({ error: error.message || "파일 처리 중 오류가 발생했습니다." });
+      // 사용자에게 친화적인 에러 메시지 반환 (내부 쿼리 정보 노출 방지)
+      let userMessage = "파일 처리 중 오류가 발생했습니다.";
+      if (error.message?.includes("Failed query")) {
+        userMessage = "도서 저장 중 데이터베이스 오류가 발생했습니다. 파일 크기가 너무 크거나 형식이 올바르지 않을 수 있습니다.";
+      } else if (error.message?.includes("AI") || error.message?.includes("생성 실패")) {
+        userMessage = "AI 분석 중 오류가 발생했습니다. 다시 시도해주세요.";
+      } else if (error.message) {
+        userMessage = error.message;
+      }
+      return res.status(500).json({ error: userMessage });
     }
   });
 
