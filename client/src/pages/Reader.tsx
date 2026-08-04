@@ -102,6 +102,21 @@ export default function Reader() {
       .filter((line) => line.length > 0);
   }, [book?.tableOfContents]);
 
+  // 차례 항목에 해당하는 lines 인덱스 매핑
+  const tocLineIndices = useMemo(() => {
+    if (tocItems.length === 0 || lines.length === 0) return [];
+    return tocItems.map((tocItem) => {
+      // 차례 제목에서 괄호 안의 한자 등을 제거하고 핵심 키워드 추출
+      const cleanItem = tocItem.replace(/\s*\(.*?\)\s*/g, "").trim();
+      // lines에서 해당 제목이 포함된 줄을 찾음
+      const idx = lines.findIndex((line) => {
+        const cleanLine = line.replace(/\s*\(.*?\)\s*/g, "").trim();
+        return cleanLine.includes(cleanItem) || cleanItem.includes(cleanLine.slice(0, 5));
+      });
+      return idx >= 0 ? idx : -1;
+    });
+  }, [tocItems, lines]);
+
   // State
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -388,6 +403,30 @@ export default function Reader() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [nextPage, prevPage, navigate]);
 
+  // 차례 항목 클릭 시 정확한 페이지로 이동하는 함수
+  const navigateToTocItem = useCallback((tocIdx: number) => {
+    const lineIdx = tocLineIndices[tocIdx];
+    if (lineIdx < 0 || !contentRef.current || stride === 0) {
+      // 매칭 실패 시 비율 기반 폴백
+      const fallbackPage = Math.floor((tocIdx / tocItems.length) * totalPages);
+      setCurrentPage(Math.min(fallbackPage, totalPages - 1));
+      return;
+    }
+    // data-line-index 속성으로 해당 DOM 요소를 찾아 offsetLeft 기반 페이지 계산
+    const targetEl = contentRef.current.querySelector(
+      `[data-line-index="${lineIdx}"]`
+    ) as HTMLElement | null;
+    if (targetEl) {
+      const targetLeft = targetEl.offsetLeft;
+      const page = Math.floor(targetLeft / stride);
+      setCurrentPage(Math.min(page, totalPages - 1));
+    } else {
+      // DOM 요소를 못 찾으면 비율 기반 폴백
+      const fallbackPage = Math.floor((lineIdx / lines.length) * totalPages);
+      setCurrentPage(Math.min(fallbackPage, totalPages - 1));
+    }
+  }, [tocLineIndices, tocItems.length, totalPages, stride, lines.length]);
+
   // Bookmark toggle
   const isCurrentPageBookmarked = useMemo(() => {
     if (!userBookmarks) return false;
@@ -576,13 +615,11 @@ export default function Reader() {
             </div>
             <div className="space-y-1">
               {tocItems.map((item, idx) => {
-                // 차례 항목 클릭 시 해당 비율의 페이지로 이동
-                const targetPage = Math.floor((idx / tocItems.length) * totalPages);
                 return (
                   <button
                     key={idx}
                     onClick={() => {
-                      setCurrentPage(Math.min(targetPage, totalPages - 1));
+                      navigateToTocItem(idx);
                       setShowToc(false);
                     }}
                     className={`w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-amber-50 hover:text-amber-700 transition-colors ${
