@@ -5,7 +5,7 @@ import { trpc } from "@/lib/trpc";
 import { getLoginUrl } from "@/const";
 import { useState, useCallback } from "react";
 import { Link } from "wouter";
-import { BookOpen, Heart, Search, Youtube, LogIn, LogOut, Settings, List, X, Library, Gamepad2 } from "lucide-react";
+import { BookOpen, Heart, Search, Youtube, LogIn, LogOut, Settings, List, X, Library, BookImage } from "lucide-react";
 
 const GENRES = [
   { value: undefined, label: "전체" },
@@ -84,9 +84,9 @@ export default function Home() {
                 </Button>
               </Link>
             )}
-            <a href="https://dopaplay-pvhf8r4t.manus.space" target="_blank" rel="noopener noreferrer" title="게임">
+            <a href="https://mastertoon-8hxrpqwt.manus.space" target="_blank" rel="noopener noreferrer" title="웹툰">
               <Button variant="ghost" size="icon" className="w-8 h-8 opacity-60 hover:opacity-100">
-                <Gamepad2 className="w-4 h-4" />
+                <BookImage className="w-4 h-4" />
               </Button>
             </a>
           </div>
