@@ -27,6 +27,7 @@ export const books = mysqlTable("books", {
   tableOfContents: text("tableOfContents"),
   studyMaterial: text("studyMaterial"),
   audioUrl: varchar("audioUrl", { length: 1000 }),
+  webtoonUrl: varchar("webtoonUrl", { length: 1000 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

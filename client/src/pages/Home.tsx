@@ -5,7 +5,7 @@ import { trpc } from "@/lib/trpc";
 import { getLoginUrl } from "@/const";
 import { useState, useCallback } from "react";
 import { Link } from "wouter";
-import { BookOpen, Heart, Search, Youtube, LogIn, LogOut, Settings, List, X, Library, BookImage } from "lucide-react";
+import { BookOpen, Heart, Search, Youtube, LogIn, LogOut, Settings, List, X, Library, BookImage, Palette } from "lucide-react";
 
 const GENRES = [
   { value: undefined, label: "전체" },
@@ -160,13 +160,18 @@ export default function Home() {
                 {book.description && (
                   <p className="text-sm text-muted-foreground mb-3">{book.description}</p>
                 )}
-                <div className="flex flex-row gap-2">
+                <div className="flex flex-row flex-wrap gap-2">
                   <Link href={`/read/${book.id}`} className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium transition-all disabled:pointer-events-none disabled:opacity-50 border bg-transparent shadow-xs hover:bg-accent hover:text-accent-foreground h-8 rounded-md px-3 text-xs flex-1">
                       <BookOpen className="w-4 h-4" /> 읽기
                   </Link>
-                  {book.youtubeUrl && (
-                    <a href={book.youtubeUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-1 whitespace-nowrap font-medium transition-all border bg-transparent shadow-xs hover:bg-red-50 hover:text-red-600 text-red-500 h-8 rounded-md px-3 text-xs flex-1">
-                      <Youtube className="w-4 h-4" /> 오디오북 듣기
+                 {book.youtubeUrl && (
+                   <a href={book.youtubeUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-1 whitespace-nowrap font-medium transition-all border bg-transparent shadow-xs hover:bg-red-50 hover:text-red-600 text-red-500 h-8 rounded-md px-3 text-xs flex-1">
+                     <Youtube className="w-4 h-4" /> 오디오북 듣기
+                   </a>
+                 )}
+                  {book.webtoonUrl && (
+                    <a href={book.webtoonUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-1 whitespace-nowrap font-medium transition-all border bg-transparent shadow-xs hover:bg-purple-50 hover:text-purple-600 text-purple-500 h-8 rounded-md px-3 text-xs flex-1">
+                      <Palette className="w-4 h-4" /> 웹툰 보기
                     </a>
                   )}
                 </div>

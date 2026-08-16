@@ -229,7 +229,7 @@ function BooksTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> }) {
   const deleteBook = trpc.books.delete.useMutation({ onSuccess: () => utils.books.list.invalidate() });
 
   const [editingBook, setEditingBook] = useState<number | null>(null);
-  const [bookForm, setBookForm] = useState({ title: "", author: "", genre: "classic" as "classic" | "modern" | "foreign", content: "", description: "", youtubeUrl: "", googleDriveUrl: "" });
+  const [bookForm, setBookForm] = useState({ title: "", author: "", genre: "classic" as "classic" | "modern" | "foreign", content: "", description: "", youtubeUrl: "", googleDriveUrl: "", webtoonUrl: "" });
   const [showAddBook, setShowAddBook] = useState(false);
 
   // 파일 업로드 관련 상태
@@ -241,7 +241,7 @@ function BooksTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> }) {
   // AI 분석 관련 상태
   const [analyzingBookId, setAnalyzingBookId] = useState<number | null>(null);
 
-  const startEditBook = async (book: { id: number; title: string; author: string; genre: string; description?: string | null; youtubeUrl?: string | null; googleDriveUrl?: string | null }) => {
+  const startEditBook = async (book: { id: number; title: string; author: string; genre: string; description?: string | null; youtubeUrl?: string | null; googleDriveUrl?: string | null; webtoonUrl?: string | null }) => {
     setEditingBook(book.id);
     setBookForm({
       title: book.title,
@@ -251,6 +251,7 @@ function BooksTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> }) {
       description: book.description || "",
       youtubeUrl: book.youtubeUrl || "",
       googleDriveUrl: book.googleDriveUrl || "",
+      webtoonUrl: book.webtoonUrl || "",
     });
     try {
       const fullBook = await utils.books.getById.fetch({ id: book.id });
@@ -267,6 +268,7 @@ function BooksTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> }) {
     if (bookForm.content) data.content = bookForm.content;
     if (bookForm.description) data.description = bookForm.description;
     if (bookForm.googleDriveUrl) data.googleDriveUrl = bookForm.googleDriveUrl;
+    if (bookForm.webtoonUrl) data.webtoonUrl = bookForm.webtoonUrl;
     await updateBook.mutateAsync({ id: editingBook, ...data } as any);
     setEditingBook(null);
   };
@@ -282,9 +284,10 @@ function BooksTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> }) {
     if (bookForm.description) payload.description = bookForm.description;
     if (bookForm.youtubeUrl) payload.youtubeUrl = bookForm.youtubeUrl;
     if (bookForm.googleDriveUrl) payload.googleDriveUrl = bookForm.googleDriveUrl;
+    if (bookForm.webtoonUrl) payload.webtoonUrl = bookForm.webtoonUrl;
     await createBook.mutateAsync(payload);
     setShowAddBook(false);
-    setBookForm({ title: "", author: "", genre: "classic", content: "", description: "", youtubeUrl: "", googleDriveUrl: "" });
+    setBookForm({ title: "", author: "", genre: "classic", content: "", description: "", youtubeUrl: "", googleDriveUrl: "", webtoonUrl: "" });
   };
 
   const handleDeleteBook = async (id: number) => {
@@ -391,7 +394,7 @@ function BooksTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> }) {
       <section className="border border-border rounded-lg p-6 bg-card">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold">도서 목록</h2>
-          <Button size="sm" onClick={() => { setShowAddBook(true); setBookForm({ title: "", author: "", genre: "classic", content: "", description: "", youtubeUrl: "", googleDriveUrl: "" }); }}>
+          <Button size="sm" onClick={() => { setShowAddBook(true); setBookForm({ title: "", author: "", genre: "classic", content: "", description: "", youtubeUrl: "", googleDriveUrl: "", webtoonUrl: "" }); }}>
             <Plus className="w-4 h-4 mr-1" /> 수동 추가
           </Button>
         </div>
@@ -405,7 +408,8 @@ function BooksTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> }) {
               <select className="border border-input rounded px-3 py-2 text-sm bg-background" value={bookForm.genre} onChange={(e) => setBookForm({ ...bookForm, genre: e.target.value as any })}>
                 {GENRE_OPTIONS.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
               </select>
-              <Input placeholder="YouTube URL (선택)" value={bookForm.youtubeUrl} onChange={(e) => setBookForm({ ...bookForm, youtubeUrl: e.target.value })} />
+             <Input placeholder="YouTube URL (선택)" value={bookForm.youtubeUrl} onChange={(e) => setBookForm({ ...bookForm, youtubeUrl: e.target.value })} />
+              <Input placeholder="웹툰 URL (선택)" value={bookForm.webtoonUrl} onChange={(e) => setBookForm({ ...bookForm, webtoonUrl: e.target.value })} />
             </div>
             <textarea className="w-full border border-input rounded px-3 py-2 text-sm bg-background resize-y min-h-[60px]" placeholder="작품소개" value={bookForm.description} onChange={(e) => setBookForm({ ...bookForm, description: e.target.value })} />
             <Input placeholder="구글 드라이브 문서 URL (선택)" value={bookForm.googleDriveUrl} onChange={(e) => setBookForm({ ...bookForm, googleDriveUrl: e.target.value })} />
@@ -431,7 +435,8 @@ function BooksTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> }) {
                       <select className="border border-input rounded px-3 py-2 text-sm bg-background" value={bookForm.genre} onChange={(e) => setBookForm({ ...bookForm, genre: e.target.value as any })}>
                         {GENRE_OPTIONS.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
                       </select>
-                      <Input placeholder="YouTube URL" value={bookForm.youtubeUrl} onChange={(e) => setBookForm({ ...bookForm, youtubeUrl: e.target.value })} />
+                     <Input placeholder="YouTube URL" value={bookForm.youtubeUrl} onChange={(e) => setBookForm({ ...bookForm, youtubeUrl: e.target.value })} />
+                      <Input placeholder="웹툰 URL" value={bookForm.webtoonUrl} onChange={(e) => setBookForm({ ...bookForm, webtoonUrl: e.target.value })} />
                     </div>
                     <textarea className="w-full border border-input rounded px-3 py-2 text-sm bg-background resize-y min-h-[60px]" placeholder="작품소개" value={bookForm.description} onChange={(e) => setBookForm({ ...bookForm, description: e.target.value })} />
                     <Input placeholder="구글 드라이브 문서 URL" value={bookForm.googleDriveUrl} onChange={(e) => setBookForm({ ...bookForm, googleDriveUrl: e.target.value })} />

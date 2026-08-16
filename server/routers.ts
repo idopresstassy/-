@@ -45,6 +45,7 @@ export const appRouter = router({
         description: z.string().optional(),
         youtubeUrl: z.string().optional(),
         googleDriveUrl: z.string().optional(),
+        webtoonUrl: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
         const { id, isUpdate } = await db.upsertBook(input);
@@ -53,14 +54,15 @@ export const appRouter = router({
 
     update: adminProcedure
       .input(z.object({
-        id: z.number(),
-        title: z.string().min(1).optional(),
-        author: z.string().min(1).optional(),
-        genre: z.enum(["classic", "modern", "foreign"]).optional(),
-        content: z.string().optional(),
-        description: z.string().optional(),
-        youtubeUrl: z.string().optional(),
-        googleDriveUrl: z.string().optional(),
+       id: z.number(),
+       title: z.string().min(1).optional(),
+       author: z.string().min(1).optional(),
+       genre: z.enum(["classic", "modern", "foreign"]).optional(),
+       content: z.string().optional(),
+       description: z.string().optional(),
+       youtubeUrl: z.string().optional(),
+       googleDriveUrl: z.string().optional(),
+        webtoonUrl: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
         const { id, ...data } = input;

@@ -64,6 +64,7 @@ export async function getBooks(filter?: { genre?: "classic" | "modern" | "foreig
     description: books.description,
     youtubeUrl: books.youtubeUrl,
     googleDriveUrl: books.googleDriveUrl,
+    webtoonUrl: books.webtoonUrl,
     createdAt: books.createdAt,
   }).from(books).$dynamic();
 
@@ -95,7 +96,7 @@ export async function getBookByTitleAuthor(title: string, author: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-export async function createBook(data: { title: string; author: string; genre: "classic" | "modern" | "foreign"; content?: string; description?: string; youtubeUrl?: string; googleDriveUrl?: string; tableOfContents?: string; studyMaterial?: string }) {
+export async function createBook(data: { title: string; author: string; genre: "classic" | "modern" | "foreign"; content?: string; description?: string; youtubeUrl?: string; googleDriveUrl?: string; tableOfContents?: string; studyMaterial?: string; webtoonUrl?: string }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   // Explicitly set all optional fields to null if undefined to prevent Drizzle from using 'default'
@@ -109,13 +110,14 @@ export async function createBook(data: { title: string; author: string; genre: "
     googleDriveUrl: data.googleDriveUrl ?? null,
     tableOfContents: data.tableOfContents ?? null,
     studyMaterial: data.studyMaterial ?? null,
+    webtoonUrl: data.webtoonUrl ?? null,
   };
   const result = await db.insert(books).values(values).$returningId();
   return result[0].id;
 }
 
 // 같은 제목+작가의 도서가 있으면 업데이트, 없으면 새로 생성
-export async function upsertBook(data: { title: string; author: string; genre: "classic" | "modern" | "foreign"; content?: string; description?: string; youtubeUrl?: string; googleDriveUrl?: string; tableOfContents?: string; studyMaterial?: string }): Promise<{ id: number; isUpdate: boolean }> {
+export async function upsertBook(data: { title: string; author: string; genre: "classic" | "modern" | "foreign"; content?: string; description?: string; youtubeUrl?: string; googleDriveUrl?: string; tableOfContents?: string; studyMaterial?: string; webtoonUrl?: string }): Promise<{ id: number; isUpdate: boolean }> {
   const existing = await getBookByTitleAuthor(data.title, data.author);
   if (existing) {
     await updateBook(existing.id, data);
