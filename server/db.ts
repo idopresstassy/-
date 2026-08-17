@@ -307,7 +307,8 @@ export async function getDailyVisitorCounts(days = 14) {
   const firstDayKst = new Date(todayKst);
   firstDayKst.setUTCDate(firstDayKst.getUTCDate() - (days - 1));
   const firstDayUtc = new Date(firstDayKst.getTime() - kstOffsetMs);
-  const visitDate = sql<string>`DATE_FORMAT(DATE_ADD(${visits.visitedAt}, INTERVAL 9 HOUR), '%Y-%m-%d')`;
+  // SELECT와 GROUP BY에서 같은 고정 SQL 표현식을 사용해야 ONLY_FULL_GROUP_BY 환경에서도 정상 집계된다.
+  const visitDate = sql<string>`DATE_FORMAT(DATE_ADD(\`visitedAt\`, INTERVAL 9 HOUR), '%Y-%m-%d')`;
 
   const rows = await db.select({
     date: visitDate,
