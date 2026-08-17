@@ -39,6 +39,16 @@ vi.mock("./db", () => ({
   getReadingProgress: vi.fn().mockResolvedValue({ currentPage: 10, totalPages: 50 }),
   upsertReadingProgress: vi.fn().mockResolvedValue(undefined),
   recordBookView: vi.fn().mockResolvedValue(undefined),
+  getTotalUserCount: vi.fn().mockResolvedValue(10),
+  getTodayVisitorCount: vi.fn().mockResolvedValue(14),
+  getWeeklyVisitorCount: vi.fn().mockResolvedValue(52),
+  getMonthlyVisitorCount: vi.fn().mockResolvedValue(231),
+  getYearlyVisitorCount: vi.fn().mockResolvedValue(440),
+  getDailyVisitorCounts: vi.fn().mockResolvedValue([
+    { date: "2026-08-17", label: "08/17", visitors: 13 },
+    { date: "2026-08-18", label: "08/18", visitors: 4 },
+  ]),
+  getPopularBooks: vi.fn().mockResolvedValue([]),
   upsertUser: vi.fn().mockResolvedValue(undefined),
   getUserByOpenId: vi.fn().mockResolvedValue(undefined),
 }));
@@ -239,5 +249,20 @@ describe("도서 열람 기록", () => {
   it("유효하지 않은 브라우저 식별자는 거부한다", async () => {
     const caller = appRouter.createCaller(createPublicContext());
     await expect(caller.bookViews.record({ bookId: 1, viewerId: "invalid" })).rejects.toThrow();
+  });
+});
+
+describe("관리자 방문자 추이", () => {
+  it("최근 14일의 일별 방문자 데이터를 대시보드 통계에 포함한다", async () => {
+    const caller = appRouter.createCaller(createAdminContext());
+    const stats = await caller.admin.stats();
+
+    expect(stats.dailyVisitors).toEqual([
+      { date: "2026-08-17", label: "08/17", visitors: 13 },
+      { date: "2026-08-18", label: "08/18", visitors: 4 },
+    ]);
+
+    const db = await import("./db");
+    expect(db.getDailyVisitorCounts).toHaveBeenCalledWith(14);
   });
 });

@@ -6,6 +6,8 @@ import { getLoginUrl } from "@/const";
 import { useState, useRef, useMemo } from "react";
 import { useLocation } from "wouter";
 import { ChevronLeft, Plus, Trash2, Edit, Save, X, Upload, Sparkles, Loader2, Users, BarChart3, BookOpen, Mail, Send, Calendar, TrendingUp } from "lucide-react";
+import { Line, LineChart, CartesianGrid, XAxis, YAxis } from "recharts";
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 
 const GENRE_OPTIONS = [
   { value: "classic" as const, label: "고전" },
@@ -14,6 +16,13 @@ const GENRE_OPTIONS = [
 ];
 
 type AdminTab = "dashboard" | "books" | "members" | "email" | "donation";
+
+const visitorChartConfig = {
+  visitors: {
+    label: "방문자",
+    color: "#0f766e",
+  },
+} satisfies ChartConfig;
 
 export default function Admin() {
   const { user, isAuthenticated, loading } = useAuth();
@@ -186,6 +195,34 @@ function DashboardTab() {
           </div>
         </div>
       </div>
+
+      {/* Daily Visitor Trend */}
+      <section className="border border-border rounded-lg p-5 md:p-6 bg-card">
+        <div className="flex flex-col gap-1 mb-4">
+          <h2 className="text-lg font-bold">최근 14일 방문자 추이</h2>
+          <p className="text-sm text-muted-foreground">날짜별 고유 방문자 수를 한국 시간 기준으로 표시합니다.</p>
+        </div>
+        {stats?.dailyVisitors && stats.dailyVisitors.length > 0 ? (
+          <ChartContainer config={visitorChartConfig} className="h-[260px] w-full aspect-auto">
+            <LineChart accessibilityLayer data={stats.dailyVisitors} margin={{ top: 12, right: 12, left: -12, bottom: 4 }}>
+              <CartesianGrid vertical={false} strokeDasharray="3 3" />
+              <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={8} minTickGap={18} />
+              <YAxis allowDecimals={false} tickLine={false} axisLine={false} tickMargin={8} width={36} />
+              <ChartTooltip cursor={{ stroke: "#0f766e", strokeDasharray: "3 3" }} content={<ChartTooltipContent />} />
+              <Line
+                type="monotone"
+                dataKey="visitors"
+                stroke="var(--color-visitors)"
+                strokeWidth={3}
+                dot={{ r: 3, fill: "var(--color-visitors)", strokeWidth: 0 }}
+                activeDot={{ r: 5, fill: "var(--color-visitors)", strokeWidth: 0 }}
+              />
+            </LineChart>
+          </ChartContainer>
+        ) : (
+          <div className="h-[260px] flex items-center justify-center text-sm text-muted-foreground">표시할 방문자 데이터가 없습니다.</div>
+        )}
+      </section>
 
       {/* Popular Books Ranking */}
       <section className="border border-border rounded-lg p-6 bg-card">

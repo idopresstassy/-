@@ -296,6 +296,40 @@ export async function getYearlyVisitorCount() {
   return result[0]?.count || 0;
 }
 
+export async function getDailyVisitorCounts(days = 14) {
+  const db = await getDb();
+  if (!db) return [];
+
+  // 날짜별 집계와 표시 모두 한국 시간(UTC+9)을 기준으로 한다.
+  const kstOffsetMs = 9 * 60 * 60 * 1000;
+  const todayKst = new Date(Date.now() + kstOffsetMs);
+  todayKst.setUTCHours(0, 0, 0, 0);
+  const firstDayKst = new Date(todayKst);
+  firstDayKst.setUTCDate(firstDayKst.getUTCDate() - (days - 1));
+  const firstDayUtc = new Date(firstDayKst.getTime() - kstOffsetMs);
+  const visitDate = sql<string>`DATE_FORMAT(DATE_ADD(${visits.visitedAt}, INTERVAL 9 HOUR), '%Y-%m-%d')`;
+
+  const rows = await db.select({
+    date: visitDate,
+    visitors: sql<number>`COUNT(DISTINCT COALESCE(${visits.sessionId}, ${visits.id}))`,
+  }).from(visits)
+    .where(gte(visits.visitedAt, firstDayUtc))
+    .groupBy(visitDate)
+    .orderBy(visitDate);
+
+  const visitorMap = new Map(rows.map((row) => [String(row.date).slice(0, 10), Number(row.visitors)]));
+  return Array.from({ length: days }, (_, index) => {
+    const currentKst = new Date(firstDayKst);
+    currentKst.setUTCDate(firstDayKst.getUTCDate() + index);
+    const date = currentKst.toISOString().slice(0, 10);
+    return {
+      date,
+      label: `${String(currentKst.getUTCMonth() + 1).padStart(2, "0")}/${String(currentKst.getUTCDate()).padStart(2, "0")}`,
+      visitors: visitorMap.get(date) ?? 0,
+    };
+  });
+}
+
 export async function getPopularBooks(limit = 10) {
   const db = await getDb();
   if (!db) return [];
