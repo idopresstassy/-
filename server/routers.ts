@@ -174,7 +174,7 @@ export const appRouter = router({
         db.getWeeklyVisitorCount(),
         db.getMonthlyVisitorCount(),
         db.getYearlyVisitorCount(),
-        db.getPopularBooks(10),
+        db.getPopularBooks(50),
       ]);
       return { totalUsers, todayVisitors, weeklyVisitors, monthlyVisitors, yearlyVisitors, popularBooks };
     }),
