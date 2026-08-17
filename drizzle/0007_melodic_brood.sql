@@ -1,0 +1,1 @@
+ALTER TABLE `book_views` ADD `userId` int;

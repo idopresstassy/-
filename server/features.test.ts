@@ -38,6 +38,7 @@ vi.mock("./db", () => ({
   removeBookmark: vi.fn().mockResolvedValue(undefined),
   getReadingProgress: vi.fn().mockResolvedValue({ currentPage: 10, totalPages: 50 }),
   upsertReadingProgress: vi.fn().mockResolvedValue(undefined),
+  recordBookView: vi.fn().mockResolvedValue(undefined),
   upsertUser: vi.fn().mockResolvedValue(undefined),
   getUserByOpenId: vi.fn().mockResolvedValue(undefined),
 }));
@@ -211,5 +212,32 @@ describe("progress router", () => {
   it("unauthenticated user cannot save progress", async () => {
     const caller = appRouter.createCaller(createPublicContext());
     await expect(caller.progress.save({ bookId: 1, currentPage: 15, totalPages: 50 })).rejects.toThrow();
+  });
+});
+
+describe("도서 열람 기록", () => {
+  it("로그인 없이도 도서 열람을 기록한다", async () => {
+    const caller = appRouter.createCaller(createPublicContext());
+    const viewerId = "11111111-1111-4111-8111-111111111111";
+
+    await expect(caller.bookViews.record({ bookId: 1, viewerId })).resolves.toEqual({ success: true });
+
+    const db = await import("./db");
+    expect(db.recordBookView).toHaveBeenCalledWith(1, viewerId, undefined);
+  });
+
+  it("로그인한 사용자도 도서 열람을 같은 통합 기록에 저장한다", async () => {
+    const caller = appRouter.createCaller(createUserContext());
+    const viewerId = "22222222-2222-4222-8222-222222222222";
+
+    await expect(caller.bookViews.record({ bookId: 1, viewerId })).resolves.toEqual({ success: true });
+
+    const db = await import("./db");
+    expect(db.recordBookView).toHaveBeenCalledWith(1, viewerId, 1);
+  });
+
+  it("유효하지 않은 브라우저 식별자는 거부한다", async () => {
+    const caller = appRouter.createCaller(createPublicContext());
+    await expect(caller.bookViews.record({ bookId: 1, viewerId: "invalid" })).rejects.toThrow();
   });
 });

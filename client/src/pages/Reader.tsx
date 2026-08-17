@@ -44,7 +44,7 @@ export default function Reader() {
   const [, params] = useRoute("/read/:id");
   const [, navigate] = useLocation();
   const bookId = params?.id ? Number(params.id) : 0;
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
 
   // Fetch book data
   const { data: book, isLoading: bookLoading } = trpc.books.getById.useQuery(
@@ -65,6 +65,38 @@ export default function Reader() {
     { enabled: bookId > 0 && !!user }
   );
   const saveProgressMutation = trpc.progress.save.useMutation();
+  const recordBookViewMutation = trpc.bookViews.record.useMutation();
+  const bookViewRecorded = useRef(false);
+
+  // 로그인 여부와 관계없이 도서 열람을 누적 인기 순위에 반영한다.
+  // 같은 브라우저가 같은 도서를 새로고침해도 한 번만 기록한다.
+  useEffect(() => {
+    if (authLoading || !book || !bookId || bookViewRecorded.current) return;
+
+    const viewerKey = "book_reader_id";
+    let viewerId = localStorage.getItem(viewerKey);
+    if (!viewerId) {
+      viewerId = crypto.randomUUID();
+      localStorage.setItem(viewerKey, viewerId);
+    }
+
+    const bookViewKey = `book_view_${bookId}`;
+    if (localStorage.getItem(bookViewKey)) {
+      bookViewRecorded.current = true;
+      return;
+    }
+
+    bookViewRecorded.current = true;
+    recordBookViewMutation.mutate(
+      { bookId, viewerId },
+      {
+        onSuccess: () => localStorage.setItem(bookViewKey, "1"),
+        onError: () => {
+          bookViewRecorded.current = false;
+        },
+      }
+    );
+  }, [authLoading, book, bookId, recordBookViewMutation]);
 
   // Bookmarks
   const { data: userBookmarks } = trpc.bookmarks.list.useQuery(

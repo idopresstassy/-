@@ -1,6 +1,6 @@
 import { eq, and, like, or, sql, desc, gte, count } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, books, donationInfo, bookmarks, readingProgress, bookshelf, visits } from "../drizzle/schema";
+import { InsertUser, users, books, donationInfo, bookmarks, readingProgress, bookshelf, visits, bookViews } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -299,18 +299,29 @@ export async function getYearlyVisitorCount() {
 export async function getPopularBooks(limit = 10) {
   const db = await getDb();
   if (!db) return [];
-  // 인기 도서 = 읽기 진행도 레코드가 가장 많은 도서
+  // 인기 도서 = 로그인·비로그인 모두를 같은 기준으로 기록한 고유 열람 수의 누적 합계
+  const readerCount = sql<number>`COUNT(DISTINCT ${bookViews.viewerId})`;
   const result = await db.select({
-    bookId: readingProgress.bookId,
-    readerCount: count(),
+    bookId: books.id,
+    readerCount,
     title: books.title,
     author: books.author,
-  }).from(readingProgress)
-    .innerJoin(books, eq(readingProgress.bookId, books.id))
-    .groupBy(readingProgress.bookId, books.title, books.author)
-    .orderBy(desc(count()))
+  }).from(books)
+    .leftJoin(bookViews, eq(bookViews.bookId, books.id))
+    .groupBy(books.id, books.title, books.author)
+    .having(sql`COUNT(DISTINCT ${bookViews.viewerId}) > 0`)
+    .orderBy(desc(readerCount), books.title)
     .limit(limit);
-  return result;
+  return result.map((book) => ({ ...book, readerCount: Number(book.readerCount) }));
+}
+
+export async function recordBookView(bookId: number, viewerId: string, userId?: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  // 동일 브라우저가 같은 도서를 다시 열어도 하나의 누적 독자로만 집계
+  await db.insert(bookViews).values({ bookId, viewerId, userId: userId ?? null }).onDuplicateKeyUpdate({
+    set: { viewerId },
+  });
 }
 
 export async function recordVisit(userId?: number, sessionId?: string) {

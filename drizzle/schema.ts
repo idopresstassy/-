@@ -1,4 +1,4 @@
-import { int, mediumtext, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { int, mediumtext, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 
 export const users = mysqlTable("users", {
   id: int("id").autoincrement().primaryKey(),
@@ -71,6 +71,19 @@ export const readingProgress = mysqlTable("reading_progress", {
 });
 
 export type ReadingProgress = typeof readingProgress.$inferSelect;
+
+// 로그인·비로그인 독자의 도서 열람 기록: 같은 독자의 동일 도서는 한 번만 누적
+export const bookViews = mysqlTable("book_views", {
+  id: int("id").autoincrement().primaryKey(),
+  bookId: int("bookId").notNull(),
+  viewerId: varchar("viewerId", { length: 64 }).notNull(),
+  userId: int("userId"),
+  viewedAt: timestamp("viewedAt").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("book_views_book_viewer_unique").on(table.bookId, table.viewerId),
+]);
+
+export type BookView = typeof bookViews.$inferSelect;
 
 export const bookshelf = mysqlTable("bookshelf", {
   id: int("id").autoincrement().primaryKey(),

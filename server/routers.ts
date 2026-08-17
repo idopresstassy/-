@@ -165,6 +165,19 @@ export const appRouter = router({
       }),
   }),
 
+  // 로그인 여부와 무관하게 인기 순위에 반영하기 위한 도서 열람 기록
+  bookViews: router({
+    record: publicProcedure
+      .input(z.object({
+        bookId: z.number().int().positive(),
+        viewerId: z.string().uuid(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await db.recordBookView(input.bookId, input.viewerId, ctx.user?.id);
+        return { success: true };
+      }),
+  }),
+
   // ==================== ADMIN ====================
   admin: router({
     stats: adminProcedure.query(async () => {
