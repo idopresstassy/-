@@ -3,9 +3,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
 import { booksQueryOptions, getBookCountLabel, shouldShowEmptyBooks } from "@/lib/booksQueryPolicy";
-import { getLoginUrl } from "@/const";
+import { SUPABASE_LOGIN_ROUTE } from "@/lib/authNavigation";
 import { useState, useCallback } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { BookOpen, Heart, Search, Youtube, LogIn, LogOut, Settings, List, X, Library, BookImage, Palette } from "lucide-react";
 
 const GENRES = [
@@ -23,6 +23,7 @@ function isInAppBrowser(): boolean {
 
 export default function Home() {
   const { user, isAuthenticated, logout } = useAuth();
+  const [, navigate] = useLocation();
   const [genre, setGenre] = useState<"classic" | "modern" | "foreign" | undefined>(undefined);
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
@@ -75,7 +76,7 @@ export default function Home() {
                 if (isInAppBrowser()) {
                   setShowInAppAlert(true);
                 } else {
-                  window.location.href = getLoginUrl();
+                  navigate(SUPABASE_LOGIN_ROUTE);
                 }
               }}>
                 <LogIn className="w-4 h-4 mr-1" /> 로그인
