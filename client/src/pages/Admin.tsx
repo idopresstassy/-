@@ -515,7 +515,7 @@ function BooksTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> }) {
 // ==================== MEMBERS TAB ====================
 function MembersTab() {
   const { data: members, isLoading } = trpc.admin.users.useQuery();
-  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const { data: readingHistory, isLoading: historyLoading } = trpc.admin.userReadingHistory.useQuery(
     { userId: selectedUserId! },
     { enabled: selectedUserId !== null }

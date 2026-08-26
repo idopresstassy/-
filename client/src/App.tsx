@@ -8,6 +8,7 @@ import Home from "./pages/Home";
 import Reader from "./pages/Reader";
 import Admin from "./pages/Admin";
 import Bookshelf from "./pages/Bookshelf";
+import Login from "./pages/Login";
 import { trpc } from "@/lib/trpc";
 import { useEffect, useRef, useState } from "react";
 
@@ -18,6 +19,7 @@ function Router() {
       <Route path={"/read/:id"} component={Reader} />
       <Route path={"/admin"} component={Admin} />
       <Route path={"/bookshelf"} component={Bookshelf} />
+      <Route path={"/login"} component={Login} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>

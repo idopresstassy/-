@@ -4,7 +4,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import * as db from "./db";
+import * as db from "./supabaseDb";
 
 export const appRouter = router({
   system: systemRouter,
@@ -198,7 +198,7 @@ export const appRouter = router({
     }),
 
     userReadingHistory: adminProcedure
-      .input(z.object({ userId: z.number() }))
+      .input(z.object({ userId: z.string().uuid() }))
       .query(async ({ input }) => {
         return await db.getUserReadingHistory(input.userId);
       }),
