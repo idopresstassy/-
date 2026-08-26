@@ -2,13 +2,13 @@ import { Express, Request, Response, NextFunction } from "express";
 import multer from "multer";
 import mammoth from "mammoth";
 import { invokeLLM } from "./_core/llm";
-import * as db from "./db";
-import { sdk } from "./_core/sdk";
+import * as db from "./supabaseDb";
+import { getRequestUser } from "./supabase";
 
 // 관리자 인증 미들웨어
 async function requireAdmin(req: Request, res: Response, next: NextFunction) {
   try {
-    const user = await sdk.authenticateRequest(req);
+    const user = await getRequestUser(req);
     if (!user || user.role !== "admin") {
       return res.status(403).json({ error: "관리자 권한이 필요합니다." });
     }

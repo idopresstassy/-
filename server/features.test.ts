@@ -2,8 +2,8 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 
-// Mock the db module
-vi.mock("./db", () => ({
+// Mock the Supabase data module
+vi.mock("./supabaseDb", () => ({
   getBooks: vi.fn().mockImplementation(async (filter?: { genre?: string; search?: string }) => {
     const allBooks = [
       { id: 1, title: "홍길동전", author: "허균", genre: "classic", youtubeUrl: null, googleDriveUrl: null, createdAt: new Date() },
@@ -49,6 +49,13 @@ vi.mock("./db", () => ({
     { date: "2026-08-18", label: "08/18", visitors: 4 },
   ]),
   getPopularBooks: vi.fn().mockResolvedValue([]),
+  getBookshelfByUser: vi.fn().mockResolvedValue([]),
+  addToBookshelf: vi.fn().mockResolvedValue(1),
+  removeFromBookshelf: vi.fn().mockResolvedValue(undefined),
+  isInBookshelf: vi.fn().mockResolvedValue(false),
+  getAllUsers: vi.fn().mockResolvedValue([]),
+  getUserReadingHistory: vi.fn().mockResolvedValue({ reading: [], completed: [] }),
+  getAllUserEmails: vi.fn().mockResolvedValue([]),
   upsertUser: vi.fn().mockResolvedValue(undefined),
   getUserByOpenId: vi.fn().mockResolvedValue(undefined),
 }));
@@ -64,7 +71,7 @@ function createPublicContext(): TrpcContext {
 function createUserContext(): TrpcContext {
   return {
     user: {
-      id: 1, openId: "user-1", email: "user@test.com", name: "User",
+      id: "00000000-0000-4000-8000-000000000001", openId: "user-1", email: "user@test.com", name: "User",
       loginMethod: "manus", role: "user", createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date(),
     },
     req: { protocol: "https", headers: {} } as TrpcContext["req"],
@@ -75,7 +82,7 @@ function createUserContext(): TrpcContext {
 function createAdminContext(): TrpcContext {
   return {
     user: {
-      id: 1, openId: "admin-1", email: "admin@test.com", name: "Admin",
+      id: "00000000-0000-4000-8000-000000000002", openId: "admin-1", email: "admin@test.com", name: "Admin",
       loginMethod: "manus", role: "admin", createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date(),
     },
     req: { protocol: "https", headers: {} } as TrpcContext["req"],
@@ -232,7 +239,7 @@ describe("도서 열람 기록", () => {
 
     await expect(caller.bookViews.record({ bookId: 1, viewerId })).resolves.toEqual({ success: true });
 
-    const db = await import("./db");
+    const db = await import("./supabaseDb");
     expect(db.recordBookView).toHaveBeenCalledWith(1, viewerId, undefined);
   });
 
@@ -242,8 +249,8 @@ describe("도서 열람 기록", () => {
 
     await expect(caller.bookViews.record({ bookId: 1, viewerId })).resolves.toEqual({ success: true });
 
-    const db = await import("./db");
-    expect(db.recordBookView).toHaveBeenCalledWith(1, viewerId, 1);
+    const db = await import("./supabaseDb");
+    expect(db.recordBookView).toHaveBeenCalledWith(1, viewerId, "00000000-0000-4000-8000-000000000001");
   });
 
   it("유효하지 않은 브라우저 식별자는 거부한다", async () => {
@@ -262,7 +269,7 @@ describe("관리자 방문자 추이", () => {
       { date: "2026-08-18", label: "08/18", visitors: 4 },
     ]);
 
-    const db = await import("./db");
+    const db = await import("./supabaseDb");
     expect(db.getDailyVisitorCounts).toHaveBeenCalledWith(14);
   });
 });
