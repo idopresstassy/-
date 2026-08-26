@@ -153,3 +153,12 @@
 - [ ] 관리형 분리 호스팅·DB·이미지 저장소 서비스 계정 연결 및 신규 환경 생성
 - [x] Supabase PostgreSQL용 명작무료책방 데이터 스키마와 이미지 버킷 정책 생성
 - [ ] 기존 Manus OAuth 의존성을 Supabase 인증 구조로 전환
+- [ ] 기존 백업에서 도서·후원 설정 데이터를 새 Supabase DB로 복구
+- [x] 기존 백업의 도서 237권과 후원 설정을 Supabase PostgreSQL에 복구하고 건수 확인
+- [x] Supabase 이메일 로그인 계정을 생성하고 첫 관리자 권한(role=admin) 지정
+- [ ] Render 배포에서 남은 Manus 전용 인증·저장소·AI 의존성 정리 및 회귀 테스트
+- [ ] Render 서비스에 korealib.com 사용자 도메인 등록 및 DNS 연결 값 확보
+- [ ] korealib.com HTTPS 발급·최종 접속·리디렉션 검증 후 기존 Manus 도메인 의존성 해제
+- [ ] Render 사이트에서 도서 목록이 간헐적으로 0권으로 표시되는 Supabase 데이터 연결 오류 진단 및 복구
+- [ ] Render Free 콜드스타트와 최소 유료 요금제의 운영 적합성·비용 확인 후 전환 여부 결정
+- [ ] 모바일에서 도서 목록 요청 실패를 빈 도서관으로 잘못 표시하지 않고 재시도·오류 안내를 제공하도록 수정

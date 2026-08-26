@@ -2,6 +2,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
+import { booksQueryOptions, getBookCountLabel, shouldShowEmptyBooks } from "@/lib/booksQueryPolicy";
 import { getLoginUrl } from "@/const";
 import { useState, useCallback } from "react";
 import { Link } from "wouter";
@@ -30,9 +31,12 @@ export default function Home() {
   const [showBookList, setShowBookList] = useState(false);
 
   // 전체목록용 데이터 (필터 없이 전체)
-  const { data: allBooks } = trpc.books.list.useQuery({});
+  const { data: allBooks, isError: allBooksError, refetch: refetchAllBooks } = trpc.books.list.useQuery({}, booksQueryOptions);
 
-  const { data: books, isLoading } = trpc.books.list.useQuery({ genre, search: search || undefined });
+  const { data: books, isLoading, isError: booksError, refetch: refetchBooks } = trpc.books.list.useQuery(
+    { genre, search: search || undefined },
+    booksQueryOptions,
+  );
   const { data: donation } = trpc.donation.get.useQuery();
 
   const handleSearch = (e: React.FormEvent) => {
@@ -115,7 +119,7 @@ export default function Home() {
             </Button>
           </form>
           <Button variant="outline" size="sm" onClick={() => setShowBookList(true)}>
-            <List className="w-4 h-4 mr-1" /> <span className="sm:hidden">목록</span><span className="hidden sm:inline">전체목록({allBooks?.length || 0})</span>
+            <List className="w-4 h-4 mr-1" /> <span className="sm:hidden">목록</span><span className="hidden sm:inline">전체목록({getBookCountLabel(allBooks, allBooksError)})</span>
           </Button>
         </div>
       </div>
@@ -143,6 +147,13 @@ export default function Home() {
             {[1, 2, 3, 4, 5, 6].map((i) => (
               <div key={i} className="h-48 bg-muted animate-pulse rounded-lg" />
             ))}
+          </div>
+        ) : booksError ? (
+          <div className="text-center py-16 text-muted-foreground">
+            <BookOpen className="w-12 h-12 mx-auto mb-4 opacity-50" />
+            <p className="mb-4">도서 목록을 불러오는 데 시간이 걸리고 있습니다.</p>
+            <p className="text-sm mb-5">잠시 후 다시 시도하거나 아래 버튼을 눌러 새로 불러와 주세요.</p>
+            <Button variant="outline" onClick={() => refetchBooks()}>다시 불러오기</Button>
           </div>
         ) : books && books.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -178,12 +189,12 @@ export default function Home() {
               </div>
             ))}
           </div>
-        ) : (
+        ) : shouldShowEmptyBooks(books, booksError) ? (
           <div className="text-center py-16 text-muted-foreground">
             <BookOpen className="w-12 h-12 mx-auto mb-4 opacity-50" />
             <p>등록된 도서가 없습니다.</p>
           </div>
-        )}
+        ) : null}
       </section>
 
       {/* Donation Modal */}
@@ -221,13 +232,18 @@ export default function Home() {
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50" onClick={() => setShowBookList(false)}>
           <div className="bg-card rounded-lg shadow-xl w-full max-w-lg mx-4 max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border">
-              <h3 className="text-lg font-bold font-serif text-foreground">전체 목록 <span className="text-sm font-normal text-muted-foreground">({allBooks?.length || 0}권)</span></h3>
+              <h3 className="text-lg font-bold font-serif text-foreground">전체 목록 <span className="text-sm font-normal text-muted-foreground">({getBookCountLabel(allBooks, allBooksError)}{allBooksError ? "" : "권"})</span></h3>
               <button onClick={() => setShowBookList(false)} className="p-1 hover:bg-secondary rounded">
                 <X className="w-5 h-5" />
               </button>
             </div>
             <div className="overflow-y-auto p-3">
-              {allBooks && allBooks.length > 0 ? (
+              {allBooksError ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <p className="mb-4">전체 목록을 불러오지 못했습니다.</p>
+                  <Button variant="outline" size="sm" onClick={() => refetchAllBooks()}>다시 불러오기</Button>
+                </div>
+              ) : allBooks && allBooks.length > 0 ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {allBooks.map((book) => {
                     const genreColor = book.genre === "classic"
@@ -248,9 +264,9 @@ export default function Home() {
                     );
                   })}
                 </div>
-              ) : (
+              ) : shouldShowEmptyBooks(allBooks, allBooksError) ? (
                 <p className="text-center py-8 text-muted-foreground">등록된 도서가 없습니다.</p>
-              )}
+              ) : <p className="text-center py-8 text-muted-foreground">도서 목록을 불러오는 중입니다.</p>}
             </div>
           </div>
         </div>

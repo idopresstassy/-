@@ -1,6 +1,6 @@
 // Service Worker for PWA + offline book caching
 const CACHE_NAME = "book-cache-v2";
-const STATIC_CACHE_NAME = "static-cache-v1";
+const STATIC_CACHE_NAME = "static-cache-v2";
 const BOOK_CACHE_PREFIX = "book-content-";
 
 const STATIC_ASSETS = [
