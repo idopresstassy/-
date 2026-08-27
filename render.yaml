@@ -3,7 +3,7 @@ services:
     runtime: node
     name: korealib-library
     region: singapore
-    plan: free
+    plan: starter
     buildCommand: pnpm install --frozen-lockfile && pnpm run build
     startCommand: pnpm run start
     autoDeploy: true

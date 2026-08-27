@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
+import { SUPABASE_PASSWORD_RESET_ROUTE } from "@/lib/authNavigation";
 
 export default function Login() {
   const [, navigate] = useLocation();
@@ -44,6 +45,7 @@ export default function Login() {
         <button className="mt-4 text-sm text-amber-800 underline" onClick={() => { setMode(mode === "signin" ? "signup" : "signin"); setMessage(""); }}>
           {mode === "signin" ? "처음 방문하셨나요? 회원가입" : "이미 계정이 있나요? 로그인"}
         </button>
+        {mode === "signin" && <button className="mt-3 block text-sm text-stone-600 underline" onClick={() => navigate(SUPABASE_PASSWORD_RESET_ROUTE)}>비밀번호를 잊으셨나요?</button>}
       </section>
     </main>
   );

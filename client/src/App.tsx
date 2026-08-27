@@ -9,6 +9,7 @@ import Reader from "./pages/Reader";
 import Admin from "./pages/Admin";
 import Bookshelf from "./pages/Bookshelf";
 import Login from "./pages/Login";
+import ResetPassword from "./pages/ResetPassword";
 import { trpc } from "@/lib/trpc";
 import { useEffect, useRef, useState } from "react";
 
@@ -20,6 +21,7 @@ function Router() {
       <Route path={"/admin"} component={Admin} />
       <Route path={"/bookshelf"} component={Bookshelf} />
       <Route path={"/login"} component={Login} />
+      <Route path={"/reset-password"} component={ResetPassword} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>
