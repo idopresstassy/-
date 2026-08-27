@@ -1,10 +1,9 @@
 // Service Worker for PWA + offline book caching
-const CACHE_NAME = "book-cache-v2";
-const STATIC_CACHE_NAME = "static-cache-v2";
+const CACHE_NAME = "book-cache-v3";
+const STATIC_CACHE_NAME = "static-cache-v3";
 const BOOK_CACHE_PREFIX = "book-content-";
 
 const STATIC_ASSETS = [
-  '/',
   '/manifest.json',
 ];
 
@@ -119,6 +118,13 @@ self.addEventListener("fetch", (event) => {
   }
 
   // Static assets - stale-while-revalidate
+  // Always fetch HTML shells from the network first so an old PWA cannot retain
+  // prior Manus login or logo markup after a Render deployment.
+  if (request.mode === "navigate") {
+    event.respondWith(fetch(request).catch(() => caches.match(request)));
+    return;
+  }
+
   event.respondWith(
     caches.open(STATIC_CACHE_NAME).then(async (cache) => {
       const cachedResponse = await cache.match(request);

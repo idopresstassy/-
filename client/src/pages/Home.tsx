@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
 import { booksQueryOptions, getBookCountLabel, shouldShowEmptyBooks } from "@/lib/booksQueryPolicy";
-import { SUPABASE_LOGIN_ROUTE } from "@/lib/authNavigation";
+import { getSupabaseLoginRoute } from "@/lib/authNavigation";
 import { BRAND_LOGO_URL } from "@/lib/brand";
 import { useState, useCallback } from "react";
 import { Link, useLocation } from "wouter";
@@ -16,12 +16,6 @@ const GENRES = [
   { value: "foreign" as const, label: "해외" },
 ];
 
-function isInAppBrowser(): boolean {
-  const ua = navigator.userAgent || navigator.vendor || "";
-  // 카카오톡, 네이버, 인스타그램, 페이스북, 라인 등 인앱 브라우저 감지
-  return /KAKAOTALK|NAVER|Instagram|FBAN|FBAV|Line|DaumApps|everytimeApp|SamsungBrowser\/.*CrossApp/i.test(ua);
-}
-
 export default function Home() {
   const { user, isAuthenticated, logout } = useAuth();
   const [, navigate] = useLocation();
@@ -29,7 +23,6 @@ export default function Home() {
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [showDonation, setShowDonation] = useState(false);
-  const [showInAppAlert, setShowInAppAlert] = useState(false);
   const [showBookList, setShowBookList] = useState(false);
 
   // 전체목록용 데이터 (필터 없이 전체)
@@ -73,13 +66,7 @@ export default function Home() {
                 <LogOut className="w-4 h-4 mr-1" /> 로그아웃
               </Button>
             ) : (
-              <Button variant="ghost" size="sm" onClick={() => {
-                if (isInAppBrowser()) {
-                  setShowInAppAlert(true);
-                } else {
-                  navigate(SUPABASE_LOGIN_ROUTE);
-                }
-              }}>
+              <Button variant="ghost" size="sm" onClick={() => navigate(getSupabaseLoginRoute(navigator.userAgent))}>
                 <LogIn className="w-4 h-4 mr-1" /> 로그인
               </Button>
             )}
@@ -274,36 +261,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* In-App Browser Alert Modal */}
-      {showInAppAlert && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50" onClick={() => setShowInAppAlert(false)}>
-          <div className="bg-card rounded-lg p-6 max-w-sm w-full mx-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-foreground mb-3">외부 브라우저에서 로그인해 주세요</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              현재 앱 내 브라우저에서는 Google 로그인이 제한됩니다.
-              Chrome, Safari 등 외부 브라우저에서 접속해 주세요.
-            </p>
-            <div className="space-y-2">
-              <Button
-                className="w-full"
-                onClick={() => {
-                  const url = window.location.href;
-                  navigator.clipboard.writeText(url);
-                  alert("주소가 복사되었습니다. Chrome 또는 Safari에 붙여넣기 해주세요.");
-                }}
-              >
-                주소 복사하기
-              </Button>
-              <Button variant="outline" className="w-full" onClick={() => setShowInAppAlert(false)}>
-                닫기
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground mt-3 text-center">
-              ※ 로그인 없이도 도서 읽기는 가능합니다
-            </p>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

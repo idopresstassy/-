@@ -150,21 +150,25 @@
 - [x] GUI 진행 상태와 오류 메시지 표시 및 ZIP 패키지 갱신
 - [x] korealib.com 재연결 후 명작무료책방 접속 응답 확인
 - [ ] GitHub 소스 기반의 신규 호스팅·DB·이미지 저장소 환경으로 명작무료책방 재구축
-- [ ] 관리형 분리 호스팅·DB·이미지 저장소 서비스 계정 연결 및 신규 환경 생성
+- [x] 관리형 분리 호스팅·DB·이미지 저장소 서비스 계정 연결 및 신규 환경 생성
 - [x] Supabase PostgreSQL용 명작무료책방 데이터 스키마와 이미지 버킷 정책 생성
 - [ ] 기존 Manus OAuth 의존성을 Supabase 인증 구조로 전환
-- [ ] 기존 백업에서 도서·후원 설정 데이터를 새 Supabase DB로 복구
+- [x] 기존 백업에서 도서·후원 설정 데이터를 새 Supabase DB로 복구
 - [x] 기존 백업의 도서 237권과 후원 설정을 Supabase PostgreSQL에 복구하고 건수 확인
 - [x] Supabase 이메일 로그인 계정을 생성하고 첫 관리자 권한(role=admin) 지정
 - [ ] Render 배포에서 남은 Manus 전용 인증·저장소·AI 의존성 정리 및 회귀 테스트
-- [ ] Render 서비스에 korealib.com 사용자 도메인 등록 및 DNS 연결 값 확보
-- [ ] korealib.com HTTPS 발급·최종 접속·리디렉션 검증 후 기존 Manus 도메인 의존성 해제
-- [ ] Render 사이트에서 도서 목록이 간헐적으로 0권으로 표시되는 Supabase 데이터 연결 오류 진단 및 복구
+- [x] Render 서비스에 korealib.com 사용자 도메인 등록 및 DNS 연결 값 확보
+- [x] korealib.com HTTPS 발급·최종 접속·리디렉션 검증 후 기존 Manus 도메인 의존성 해제
+- [x] Render 사이트에서 도서 목록이 간헐적으로 0권으로 표시되는 Supabase 데이터 연결 오류 진단 및 복구
 - [x] Render Free 콜드스타트와 최소 유료 요금제의 운영 적합성·비용 확인 후 Starter 전환 결정
-- [ ] 모바일에서 도서 목록 요청 실패를 빈 도서관으로 잘못 표시하지 않고 재시도·오류 안내를 제공하도록 수정
+- [x] 모바일에서 도서 목록 요청 실패를 빈 도서관으로 잘못 표시하지 않고 재시도·오류 안내를 제공하도록 수정
 - [ ] 모바일 로그인 버튼을 기존 Manus OAuth가 아닌 Supabase 이메일 로그인(/login)으로 연결
 - [ ] Supabase 이메일 계정의 비밀번호 재설정 요청·새 비밀번호 설정 화면 추가
 - [x] Render Web Service를 Starter 인스턴스로 변경하고 배포 성공·Live 상태 확인
-- [ ] render.yaml의 인스턴스 플랜을 Starter 운영 상태와 일치시키고 GitHub에 반영
-- [ ] Render 대시보드에서 Starter 플랜·Live 상태가 유지되는지 재확인
-- [ ] 이전 Manus 저장소 경로를 제거하고 제공된 금색 책·깃펜 로고를 Render·모바일 PWA에서 정상 표시
+- [x] render.yaml의 인스턴스 플랜을 Starter 운영 상태와 일치시키고 GitHub에 반영
+- [x] Render 대시보드에서 Starter 플랜·Live 상태가 유지되는지 재확인
+- [x] 클라이언트·PWA의 이전 Manus 로고 경로를 교체하고 제공된 금색 책·깃펜 로고를 Render에 배포
+- [ ] 서버의 Manus Storage Proxy 및 `/manus-storage` 반환 경로를 Supabase Storage 구조로 제거·대체
+- [ ] 스마트폰 PWA 설치 상태에서 새 로고·아이콘이 정상 표시되는지 재검증
+- [ ] 네이버 등 앱 내 브라우저에서도 Supabase 이메일 로그인으로 바로 이동하도록 이전 외부 브라우저 안내 제거
+- [ ] 새 배포 시 이전 Manus 로고·로그인 화면이 남지 않도록 PWA 서비스 워커 캐시 갱신 강화
