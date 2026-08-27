@@ -167,3 +167,4 @@
 - [x] Render Web Service를 Starter 인스턴스로 변경하고 배포 성공·Live 상태 확인
 - [ ] render.yaml의 인스턴스 플랜을 Starter 운영 상태와 일치시키고 GitHub에 반영
 - [ ] Render 대시보드에서 Starter 플랜·Live 상태가 유지되는지 재확인
+- [ ] 이전 Manus 저장소 경로를 제거하고 제공된 금색 책·깃펜 로고를 Render·모바일 PWA에서 정상 표시

@@ -12,6 +12,7 @@ import Login from "./pages/Login";
 import ResetPassword from "./pages/ResetPassword";
 import { trpc } from "@/lib/trpc";
 import { useEffect, useRef, useState } from "react";
+import { BRAND_LOGO_URL } from "@/lib/brand";
 
 function Router() {
   return (
@@ -118,7 +119,7 @@ function PWAInstallPrompt() {
       <div className="fixed bottom-0 left-0 right-0 z-[9999] p-4 bg-card border-t border-border shadow-lg animate-in slide-in-from-bottom duration-300">
         <div className="max-w-lg mx-auto flex items-center gap-3">
           <img
-            src="/manus-storage/icon-192_754af1f8.png"
+            src={BRAND_LOGO_URL}
             alt="명작무료책방"
             className="w-12 h-12 rounded-xl shadow-sm flex-shrink-0"
           />
@@ -151,7 +152,7 @@ function PWAInstallPrompt() {
           <div className="bg-card rounded-2xl p-6 w-full max-w-sm animate-in slide-in-from-bottom duration-300">
             <div className="text-center mb-4">
               <img
-                src="/manus-storage/icon-192_754af1f8.png"
+                src={BRAND_LOGO_URL}
                 alt="명작무료책방"
                 className="w-16 h-16 rounded-xl shadow-sm mx-auto mb-3"
               />

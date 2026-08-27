@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
 import { booksQueryOptions, getBookCountLabel, shouldShowEmptyBooks } from "@/lib/booksQueryPolicy";
 import { SUPABASE_LOGIN_ROUTE } from "@/lib/authNavigation";
+import { BRAND_LOGO_URL } from "@/lib/brand";
 import { useState, useCallback } from "react";
 import { Link, useLocation } from "wouter";
 import { BookOpen, Heart, Search, Youtube, LogIn, LogOut, Settings, List, X, Library, BookImage, Palette } from "lucide-react";
@@ -53,7 +54,7 @@ export default function Home() {
           {/* Top row: Logo */}
           <div className="flex items-center justify-center py-2">
             <Link href="/" className="flex items-center gap-2">
-              <img src="/manus-storage/logo-icon_f82cb12d.png" alt="명작무료책방 로고" className="w-10 h-10 rounded-full" />
+              <img src={BRAND_LOGO_URL} alt="명작무료책방 로고" className="w-10 h-10 object-contain" />
               <h1 className="text-2xl font-bold text-foreground font-serif">명작무료책방</h1>
             </Link>
           </div>
