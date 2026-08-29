@@ -5,6 +5,7 @@ import { trpc } from "@/lib/trpc";
 import { booksQueryOptions, getBookCountLabel, shouldShowEmptyBooks } from "@/lib/booksQueryPolicy";
 import { getSupabaseLoginRoute } from "@/lib/authNavigation";
 import { BRAND_LOGO_URL } from "@/lib/brand";
+import { WEBTOON_SITE_URL } from "@/lib/externalLinks";
 import { useState, useCallback } from "react";
 import { Link, useLocation } from "wouter";
 import { BookOpen, Heart, Search, Youtube, LogIn, LogOut, Settings, List, X, Library, BookImage, Palette } from "lucide-react";
@@ -77,7 +78,7 @@ export default function Home() {
                 </Button>
               </Link>
             )}
-            <a href="https://mastertoon-8hxrpqwt.manus.space" target="_blank" rel="noopener noreferrer" title="웹툰">
+            <a href={WEBTOON_SITE_URL} target="_blank" rel="noopener noreferrer" title="웹툰">
               <Button variant="ghost" size="icon" className="w-8 h-8 opacity-60 hover:opacity-100">
                 <BookImage className="w-4 h-4" />
               </Button>
