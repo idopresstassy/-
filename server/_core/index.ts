@@ -3,8 +3,6 @@ import express from "express";
 import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { registerOAuthRoutes } from "./oauth";
-import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
@@ -38,8 +36,6 @@ async function startServer() {
   app.get("/health", (_req, res) => {
     res.status(200).json({ status: "ok" });
   });
-  registerStorageProxy(app);
-  registerOAuthRoutes(app);
   registerUploadRoutes(app);
   // tRPC API
   app.use(

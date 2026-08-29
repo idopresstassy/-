@@ -2,10 +2,11 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
+import { supabase } from "@/lib/supabase";
 import { getLoginUrl } from "@/const";
 import { useState, useRef, useMemo } from "react";
 import { useLocation } from "wouter";
-import { ChevronLeft, Plus, Trash2, Edit, Save, X, Upload, Sparkles, Loader2, Users, BarChart3, BookOpen, Mail, Send, Calendar, TrendingUp } from "lucide-react";
+import { ChevronLeft, Plus, Trash2, Edit, Save, X, Upload, Loader2, Users, BarChart3, BookOpen, Mail, Send, Calendar, TrendingUp } from "lucide-react";
 import { Line, LineChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 
@@ -276,7 +277,6 @@ function BooksTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // AI 분석 관련 상태
-  const [analyzingBookId, setAnalyzingBookId] = useState<number | null>(null);
 
   const startEditBook = async (book: { id: number; title: string; author: string; genre: string; description?: string | null; youtubeUrl?: string | null; googleDriveUrl?: string | null; webtoonUrl?: string | null }) => {
     setEditingBook(book.id);
@@ -341,7 +341,12 @@ function BooksTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> }) {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const response = await fetch("/api/upload/book", { method: "POST", body: formData });
+      const { data: { session } } = await supabase.auth.getSession();
+      const response = await fetch("/api/upload/book", {
+        method: "POST",
+        body: formData,
+        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
+      });
       const result = await response.json();
       if (!response.ok) {
         setUploadError(result.error || "업로드 실패");
@@ -357,39 +362,20 @@ function BooksTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> }) {
     }
   };
 
-  const handleAIAnalyze = async (bookId: number) => {
-    if (!confirm("AI가 이 도서의 차례와 학습자료를 자동 생성합니다. 진행하시겠습니까?")) return;
-    setAnalyzingBookId(bookId);
-    try {
-      const response = await fetch(`/api/upload/analyze/${bookId}`, { method: "POST" });
-      const result = await response.json();
-      if (!response.ok) {
-        alert(`AI 분석 실패: ${result.error}`);
-      } else {
-        alert("AI 분석 완료! 차례와 학습자료가 생성되었습니다.");
-        utils.books.list.invalidate();
-      }
-    } catch (err: any) {
-      alert(`오류: ${err.message}`);
-    } finally {
-      setAnalyzingBookId(null);
-    }
-  };
-
   return (
     <div className="space-y-6">
       {/* File Upload Section */}
       <section className="border border-border rounded-lg p-6 bg-card">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold">📁 파일로 도서 등록 (AI 자동 처리)</h2>
+          <h2 className="text-lg font-bold">📁 파일로 도서 등록</h2>
         </div>
         <p className="text-sm text-muted-foreground mb-4">
-          .docx 또는 .txt 파일을 업로드하면 AI가 자동으로 제목, 작가, 분류를 인식하고, 차례와 학습자료를 생성합니다.
+          `.docx` 또는 `.txt` 파일 안에 `■ 제목:`, `■ 작가:`, `■ 분류:`를 적어 업로드하면 도서가 등록됩니다. 차례·학습자료는 문서에 함께 넣거나 수동으로 수정할 수 있습니다.
         </p>
         <div className="flex items-center gap-3">
           <input ref={fileInputRef} type="file" accept=".docx,.txt" onChange={handleFileUpload} className="hidden" />
           <Button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="gap-2">
-            {uploading ? (<><Loader2 className="w-4 h-4 animate-spin" />AI 처리 중...</>) : (<><Upload className="w-4 h-4" />파일 업로드</>)}
+            {uploading ? (<><Loader2 className="w-4 h-4 animate-spin" />파일 처리 중...</>) : (<><Upload className="w-4 h-4" />파일 업로드</>)}
           </Button>
           <span className="text-xs text-muted-foreground">.docx 또는 .txt (최대 50MB)</span>
         </div>
@@ -398,7 +384,7 @@ function BooksTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> }) {
           <div className="mt-4 p-4 bg-secondary/30 rounded-lg">
             <div className="flex items-center gap-2 text-sm">
               <Loader2 className="w-4 h-4 animate-spin" />
-              <span>AI가 도서 정보를 분석하고 차례/학습자료를 생성하고 있습니다... (30초~1분 소요)</span>
+              <span>파일을 읽고 도서를 등록하고 있습니다...</span>
             </div>
           </div>
         )}
@@ -493,9 +479,6 @@ function BooksTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> }) {
                       <span className="text-muted-foreground ml-2">— {book.author}</span>
                     </div>
                     <div className="flex gap-1">
-                      <Button variant="ghost" size="sm" className="text-purple-600 hover:text-purple-800" onClick={() => handleAIAnalyze(book.id)} disabled={analyzingBookId === book.id} title="AI 분석 (차례/학습자료 생성)">
-                        {analyzingBookId === book.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                      </Button>
                       <Button variant="ghost" size="sm" onClick={() => startEditBook(book)}><Edit className="w-4 h-4" /></Button>
                       <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDeleteBook(book.id)}><Trash2 className="w-4 h-4" /></Button>
                     </div>
