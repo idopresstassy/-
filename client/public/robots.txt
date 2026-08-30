@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /login
+Disallow: /reset-password
+Disallow: /bookshelf
+
+Sitemap: https://korealib.com/sitemap.xml

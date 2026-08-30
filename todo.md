@@ -152,11 +152,11 @@
 - [ ] GitHub 소스 기반의 신규 호스팅·DB·이미지 저장소 환경으로 명작무료책방 재구축
 - [x] 관리형 분리 호스팅·DB·이미지 저장소 서비스 계정 연결 및 신규 환경 생성
 - [x] Supabase PostgreSQL용 명작무료책방 데이터 스키마와 이미지 버킷 정책 생성
-- [ ] 기존 Manus OAuth 의존성을 Supabase 인증 구조로 전환
+- [x] 기존 Manus OAuth 의존성을 Supabase 인증 구조로 전환
 - [x] 기존 백업에서 도서·후원 설정 데이터를 새 Supabase DB로 복구
 - [x] 기존 백업의 도서 237권과 후원 설정을 Supabase PostgreSQL에 복구하고 건수 확인
 - [x] Supabase 이메일 로그인 계정을 생성하고 첫 관리자 권한(role=admin) 지정
-- [ ] Render 배포에서 남은 Manus 전용 인증·저장소·AI 의존성 정리 및 회귀 테스트
+- [x] Render 배포에서 남은 Manus 전용 인증·저장소·AI 의존성 정리 및 회귀 테스트
 - [x] Render 서비스에 korealib.com 사용자 도메인 등록 및 DNS 연결 값 확보
 - [x] korealib.com HTTPS 발급·최종 접속·리디렉션 검증 후 기존 Manus 도메인 의존성 해제
 - [x] Render 사이트에서 도서 목록이 간헐적으로 0권으로 표시되는 Supabase 데이터 연결 오류 진단 및 복구
@@ -168,9 +168,11 @@
 - [x] render.yaml의 인스턴스 플랜을 Starter 운영 상태와 일치시키고 GitHub에 반영
 - [x] Render 대시보드에서 Starter 플랜·Live 상태가 유지되는지 재확인
 - [x] 클라이언트·PWA의 이전 Manus 로고 경로를 교체하고 제공된 금색 책·깃펜 로고를 Render에 배포
-- [ ] 서버의 Manus Storage Proxy 및 `/manus-storage` 반환 경로를 Supabase Storage 구조로 제거·대체
-- [ ] Render에서 사용할 수 없는 Manus AI 자동 분석을 명확히 비활성화하고 수동 도서 등록·업로드를 유지
+- [x] 서버의 Manus Storage Proxy 및 `/manus-storage` 반환 경로를 Supabase Storage 구조로 제거·대체
+- [x] Render에서 사용할 수 없는 Manus AI 자동 분석을 명확히 비활성화하고 수동 도서 등록·업로드를 유지
 - [ ] 스마트폰 PWA 설치 상태에서 새 로고·아이콘이 정상 표시되는지 재검증
 - [ ] 네이버 등 앱 내 브라우저에서도 Supabase 이메일 로그인으로 바로 이동하도록 이전 외부 브라우저 안내 제거
 - [ ] 새 배포 시 이전 Manus 로고·로그인 화면이 남지 않도록 PWA 서비스 워커 캐시 갱신 강화
 - [x] 상단 웹툰 바로가기 주소를 koreawebtoon.com으로 변경하고 새 창 연결 확인
+- [ ] 명작무료책방·한국문학·고전문학·무료 전자책 중심의 제목·설명·구조화 데이터·sitemap 검색 최적화 적용
+- [ ] Google Search Console과 네이버 서치어드바이저에 korealib.com 소유권 확인·sitemap 제출 안내 및 등록 완료 확인

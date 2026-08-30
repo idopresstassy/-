@@ -4,6 +4,8 @@ import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { appRouter } from "../routers";
+import { getBooks } from "../supabaseDb";
+import { buildSitemap } from "../seo";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { registerUploadRoutes } from "../upload";
@@ -35,6 +37,15 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   app.get("/health", (_req, res) => {
     res.status(200).json({ status: "ok" });
+  });
+  app.get("/sitemap.xml", async (_req, res) => {
+    try {
+      const books = await getBooks();
+      res.type("application/xml").send(buildSitemap("https://korealib.com", books));
+    } catch (error) {
+      console.error("Sitemap generation failed", error);
+      res.status(503).type("text/plain").send("Sitemap temporarily unavailable");
+    }
   });
   registerUploadRoutes(app);
   // tRPC API
