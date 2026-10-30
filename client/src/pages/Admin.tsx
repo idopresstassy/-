@@ -78,7 +78,8 @@ export default function Admin() {
         </div>
       </header>
 
-      {/* Tab Navigation */}
+      <div className="container py-2"><a className="text-sm underline" href="/admin/creative">회원 창작 작품 승인 관리 →</a></div>
+            {/* Tab Navigation */}
       <div className="border-b border-border bg-card">
         <div className="container flex overflow-x-auto">
           {tabs.map((tab) => (

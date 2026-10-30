@@ -7,6 +7,8 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import Reader from "./pages/Reader";
 import Admin from "./pages/Admin";
+import Creative from "./pages/Creative";
+import CreativeAdmin from "./pages/CreativeAdmin";
 import Bookshelf from "./pages/Bookshelf";
 import Login from "./pages/Login";
 import ResetPassword from "./pages/ResetPassword";
@@ -20,6 +22,8 @@ function Router() {
       <Route path={"/"} component={Home} />
       <Route path={"/read/:id"} component={Reader} />
       <Route path={"/admin"} component={Admin} />
+      <Route path={"/creative"} component={Creative} />
+      <Route path={"/admin/creative"} component={CreativeAdmin} />
       <Route path={"/bookshelf"} component={Bookshelf} />
       <Route path={"/login"} component={Login} />
       <Route path={"/reset-password"} component={ResetPassword} />
