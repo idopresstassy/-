@@ -54,6 +54,7 @@ export default function Home() {
           </div>
           {/* Bottom row: Navigation */}
           <div className="flex items-center justify-center gap-3 pb-2">
+            <Link href="/creative"><Button variant="ghost" size="sm">창작 작품 · 나의 작품</Button></Link>
             <Link href="/bookshelf">
               <Button variant="ghost" size="sm">
                 <Library className="w-4 h-4 mr-1" /> 내 책장
