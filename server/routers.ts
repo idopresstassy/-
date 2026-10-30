@@ -2,12 +2,48 @@ import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import * as db from "./supabaseDb";
+import * as cw from "./creativeWorks";
 
 export const appRouter = router({
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     // 세션은 브라우저의 Supabase 클라이언트가 종료합니다.
     logout: publicProcedure.mutation(() => ({ success: true } as const)),
+  }),
+
+  creative: router({
+    list: publicProcedure.query(() => cw.publicWorks()),
+    get: publicProcedure.input(z.object({id:z.number().int().positive()})).query(async ({ctx,input})=>{
+      const work=await cw.getWork(input.id,ctx.user?.id,ctx.user?.role==="admin");
+      if(!work)throw new TRPCError({code:"NOT_FOUND"});return work;
+    }),
+    mine: protectedProcedure.query(({ctx})=>cw.myWorks(ctx.user.id)),
+    pending: adminProcedure.query(()=>cw.pendingWorks()),
+    create: protectedProcedure.input(z.object({
+      title:z.string().trim().min(1).max(200),penName:z.string().trim().min(1).max(100),
+      category:z.enum(["novel","poetry","essay","children","other"]),
+      description:z.string().max(3000),content:z.string().max(300000)
+    })).mutation(({ctx,input})=>cw.createWork(ctx.user.id,input)),
+    update: protectedProcedure.input(z.object({
+      id:z.number().int().positive(),title:z.string().trim().min(1).max(200),penName:z.string().trim().min(1).max(100),
+      category:z.enum(["novel","poetry","essay","children","other"]),
+      description:z.string().max(3000),content:z.string().max(300000)
+    })).mutation(async ({ctx,input})=>{
+      const {id,...data}=input;const ok=await cw.updateWork(id,ctx.user.id,data);
+      if(!ok)throw new TRPCError({code:"FORBIDDEN",message:"수정할 수 없는 작품입니다."});
+      return {success:true};
+    }),
+    submit: protectedProcedure.input(z.object({id:z.number().int().positive()})).mutation(async ({ctx,input})=>{
+      const ok=await cw.submitWork(input.id,ctx.user.id);
+      if(!ok)throw new TRPCError({code:"BAD_REQUEST",message:"본문을 입력한 임시 작품만 제출할 수 있습니다."});
+      return {success:true};
+    }),
+    review: adminProcedure.input(z.object({id:z.number().int().positive(),status:z.enum(["published","rejected"]),note:z.string().max(3000)}))
+      .mutation(async ({input})=>{
+        const ok=await cw.reviewWork(input.id,input.status,input.note);
+        if(!ok)throw new TRPCError({code:"BAD_REQUEST",message:"승인 대기 중인 작품이 아닙니다."});
+        return {success:true};
+      })
   }),
 
   books: router({
