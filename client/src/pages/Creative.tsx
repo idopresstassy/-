@@ -59,8 +59,18 @@ export default function Creative() {
         <section className="mb-8 rounded-xl border border-border bg-card p-5 md:p-6">
           <h1 className="mb-2 text-2xl font-bold font-serif">여러분의 이야기를 보내주세요</h1>
           <p className="text-sm leading-6 text-muted-foreground">
-            로그인한 회원은 원고를 제출할 수 있습니다. 제출한 글은 사장님이 검수하고 승인한 뒤에만 ‘창작’ 메뉴에 공개됩니다.
+            회원가입 후 로그인하면 원고를 제출할 수 있습니다. 작품 제목과 작가명, 장르, 본문을 작성한 뒤 ‘검수 신청’을 눌러주세요.
           </p>
+        </section>
+
+        <section className="mb-6 rounded-xl border border-border bg-secondary/30 p-5">
+          <h2 className="mb-2 font-semibold">원고 등록 안내</h2>
+          <ul className="list-disc space-y-1 pl-5 text-sm leading-6 text-muted-foreground">
+            <li>직접 쓴 글 또는 게시 권한을 가진 글만 등록해 주세요. 다른 사람의 저작물을 허락 없이 올릴 수 없습니다.</li>
+            <li>지나치게 폭력적이거나 노골적인 성적 표현, 혐오·차별·불법 내용을 담은 글은 승인되지 않을 수 있습니다.</li>
+            <li>제출한 글은 바로 공개되지 않습니다. 관리자가 검수한 뒤 승인하면 ‘창작’ 메뉴에 공개됩니다.</li>
+            <li>제출 후에는 아래 ‘내 원고 검수 상태’에서 검수 결과와 의견을 확인할 수 있습니다.</li>
+          </ul>
         </section>
 
         {loading ? (
