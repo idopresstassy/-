@@ -4,9 +4,11 @@ import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
 import { supabase } from "@/lib/supabase";
 import { getLoginUrl } from "@/const";
+import { CREATIVE_GENRES, CREATIVE_GENRE_LABELS, type CreativeGenre } from "@shared/creative";
+import { toast } from "sonner";
 import { useState, useRef, useMemo } from "react";
 import { useLocation } from "wouter";
-import { ChevronLeft, Plus, Trash2, Edit, Save, X, Upload, Loader2, Users, BarChart3, BookOpen, Mail, Send, Calendar, TrendingUp } from "lucide-react";
+import { ChevronLeft, Plus, Trash2, Edit, Save, X, Upload, Loader2, Users, BarChart3, BookOpen, Mail, Send, Calendar, TrendingUp, PenLine, Check, Ban } from "lucide-react";
 import { Line, LineChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 
@@ -14,9 +16,10 @@ const GENRE_OPTIONS = [
   { value: "classic" as const, label: "고전" },
   { value: "modern" as const, label: "현대" },
   { value: "foreign" as const, label: "해외" },
+  { value: "creative" as const, label: "창작" },
 ];
 
-type AdminTab = "dashboard" | "books" | "members" | "email" | "donation";
+type AdminTab = "dashboard" | "books" | "creative" | "members" | "email" | "donation";
 
 const visitorChartConfig = {
   visitors: {
@@ -61,6 +64,7 @@ export default function Admin() {
   const tabs = [
     { id: "dashboard" as const, label: "대시보드", icon: BarChart3 },
     { id: "books" as const, label: "도서 관리", icon: BookOpen },
+    { id: "creative" as const, label: "창작 원고 검수", icon: PenLine },
     { id: "members" as const, label: "회원 관리", icon: Users },
     { id: "email" as const, label: "메일 발송", icon: Mail },
     { id: "donation" as const, label: "후원 설정", icon: Edit },
@@ -101,6 +105,7 @@ export default function Admin() {
       <div className="container py-8">
         {activeTab === "dashboard" && <DashboardTab />}
         {activeTab === "books" && <BooksTab utils={utils} />}
+        {activeTab === "creative" && <CreativeReviewTab utils={utils} />}
         {activeTab === "members" && <MembersTab />}
         {activeTab === "email" && <EmailTab />}
         {activeTab === "donation" && <DonationTab utils={utils} />}
@@ -267,7 +272,7 @@ function BooksTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> }) {
   const deleteBook = trpc.books.delete.useMutation({ onSuccess: () => utils.books.list.invalidate() });
 
   const [editingBook, setEditingBook] = useState<number | null>(null);
-  const [bookForm, setBookForm] = useState({ title: "", author: "", genre: "classic" as "classic" | "modern" | "foreign", content: "", description: "", youtubeUrl: "", googleDriveUrl: "", webtoonUrl: "" });
+  const [bookForm, setBookForm] = useState({ title: "", author: "", genre: "classic" as "classic" | "modern" | "foreign" | "creative", creativeGenre: "other" as CreativeGenre, content: "", description: "", youtubeUrl: "", googleDriveUrl: "", webtoonUrl: "" });
   const [showAddBook, setShowAddBook] = useState(false);
 
   // 파일 업로드 관련 상태
@@ -278,12 +283,13 @@ function BooksTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> }) {
 
   // AI 분석 관련 상태
 
-  const startEditBook = async (book: { id: number; title: string; author: string; genre: string; description?: string | null; youtubeUrl?: string | null; googleDriveUrl?: string | null; webtoonUrl?: string | null }) => {
+  const startEditBook = async (book: { id: number; title: string; author: string; genre: string; creativeGenre?: CreativeGenre | null; description?: string | null; youtubeUrl?: string | null; googleDriveUrl?: string | null; webtoonUrl?: string | null }) => {
     setEditingBook(book.id);
     setBookForm({
       title: book.title,
       author: book.author,
-      genre: book.genre as "classic" | "modern" | "foreign",
+      genre: book.genre as "classic" | "modern" | "foreign" | "creative",
+      creativeGenre: book.creativeGenre ?? "other",
       content: "로딩 중...",
       description: book.description || "",
       youtubeUrl: book.youtubeUrl || "",
@@ -300,7 +306,7 @@ function BooksTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> }) {
 
   const handleSaveBook = async () => {
     if (!editingBook) return;
-    const data: Record<string, string> = { title: bookForm.title, author: bookForm.author, genre: bookForm.genre };
+    const data: Record<string, string | null> = { title: bookForm.title, author: bookForm.author, genre: bookForm.genre, creativeGenre: bookForm.genre === "creative" ? bookForm.creativeGenre : null };
     if (bookForm.youtubeUrl) data.youtubeUrl = bookForm.youtubeUrl;
     if (bookForm.content) data.content = bookForm.content;
     if (bookForm.description) data.description = bookForm.description;
@@ -316,7 +322,7 @@ function BooksTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> }) {
       alert("본문 내용 또는 구글 드라이브 URL 중 하나는 입력해야 합니다.");
       return;
     }
-    const payload: any = { title: bookForm.title, author: bookForm.author, genre: bookForm.genre };
+    const payload: any = { title: bookForm.title, author: bookForm.author, genre: bookForm.genre, creativeGenre: bookForm.genre === "creative" ? bookForm.creativeGenre : undefined };
     if (bookForm.content) payload.content = bookForm.content;
     if (bookForm.description) payload.description = bookForm.description;
     if (bookForm.youtubeUrl) payload.youtubeUrl = bookForm.youtubeUrl;
@@ -324,7 +330,7 @@ function BooksTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> }) {
     if (bookForm.webtoonUrl) payload.webtoonUrl = bookForm.webtoonUrl;
     await createBook.mutateAsync(payload);
     setShowAddBook(false);
-    setBookForm({ title: "", author: "", genre: "classic", content: "", description: "", youtubeUrl: "", googleDriveUrl: "", webtoonUrl: "" });
+    setBookForm({ title: "", author: "", genre: "classic", creativeGenre: "other", content: "", description: "", youtubeUrl: "", googleDriveUrl: "", webtoonUrl: "" });
   };
 
   const handleDeleteBook = async (id: number) => {
@@ -417,7 +423,7 @@ function BooksTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> }) {
       <section className="border border-border rounded-lg p-6 bg-card">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold">도서 목록</h2>
-          <Button size="sm" onClick={() => { setShowAddBook(true); setBookForm({ title: "", author: "", genre: "classic", content: "", description: "", youtubeUrl: "", googleDriveUrl: "", webtoonUrl: "" }); }}>
+          <Button size="sm" onClick={() => { setShowAddBook(true); setBookForm({ title: "", author: "", genre: "classic", creativeGenre: "other", content: "", description: "", youtubeUrl: "", googleDriveUrl: "", webtoonUrl: "" }); }}>
             <Plus className="w-4 h-4 mr-1" /> 수동 추가
           </Button>
         </div>
@@ -431,6 +437,11 @@ function BooksTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> }) {
               <select className="border border-input rounded px-3 py-2 text-sm bg-background" value={bookForm.genre} onChange={(e) => setBookForm({ ...bookForm, genre: e.target.value as any })}>
                 {GENRE_OPTIONS.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
               </select>
+              {bookForm.genre === "creative" && (
+                <select className="border border-input rounded px-3 py-2 text-sm bg-background" value={bookForm.creativeGenre} onChange={(e) => setBookForm({ ...bookForm, creativeGenre: e.target.value as CreativeGenre })}>
+                  {CREATIVE_GENRES.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
+                </select>
+              )}
              <Input placeholder="YouTube URL (선택)" value={bookForm.youtubeUrl} onChange={(e) => setBookForm({ ...bookForm, youtubeUrl: e.target.value })} />
               <Input placeholder="웹툰 URL (선택)" value={bookForm.webtoonUrl} onChange={(e) => setBookForm({ ...bookForm, webtoonUrl: e.target.value })} />
             </div>
@@ -458,6 +469,11 @@ function BooksTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> }) {
                       <select className="border border-input rounded px-3 py-2 text-sm bg-background" value={bookForm.genre} onChange={(e) => setBookForm({ ...bookForm, genre: e.target.value as any })}>
                         {GENRE_OPTIONS.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
                       </select>
+                      {bookForm.genre === "creative" && (
+                        <select className="border border-input rounded px-3 py-2 text-sm bg-background" value={bookForm.creativeGenre} onChange={(e) => setBookForm({ ...bookForm, creativeGenre: e.target.value as CreativeGenre })}>
+                          {CREATIVE_GENRES.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
+                        </select>
+                      )}
                      <Input placeholder="YouTube URL" value={bookForm.youtubeUrl} onChange={(e) => setBookForm({ ...bookForm, youtubeUrl: e.target.value })} />
                       <Input placeholder="웹툰 URL" value={bookForm.webtoonUrl} onChange={(e) => setBookForm({ ...bookForm, webtoonUrl: e.target.value })} />
                     </div>
@@ -473,7 +489,7 @@ function BooksTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> }) {
                   <div className="flex items-center justify-between">
                     <div>
                       <span className="text-xs px-2 py-0.5 rounded bg-secondary text-secondary-foreground mr-2">
-                        {book.genre === "classic" ? "고전" : book.genre === "modern" ? "현대" : "해외"}
+                        {book.genre === "classic" ? "고전" : book.genre === "modern" ? "현대" : book.genre === "creative" ? `창작 · ${book.creativeGenre ? CREATIVE_GENRE_LABELS[book.creativeGenre] : "기타"}` : "해외"}
                       </span>
                       <span className="font-medium">{book.title}</span>
                       <span className="text-muted-foreground ml-2">— {book.author}</span>
@@ -492,6 +508,81 @@ function BooksTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> }) {
         )}
       </section>
     </div>
+  );
+}
+
+// ==================== CREATIVE REVIEW TAB ====================
+function CreativeReviewTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> }) {
+  const { data: submissions, isLoading } = trpc.admin.creativeSubmissions.useQuery();
+  const [reviewNotes, setReviewNotes] = useState<Record<number, string>>({});
+  const approve = trpc.admin.approveCreativeSubmission.useMutation({
+    onSuccess: async () => {
+      await Promise.all([utils.admin.creativeSubmissions.invalidate(), utils.books.list.invalidate()]);
+      toast.success("원고를 승인하고 ‘창작’ 도서 목록에 공개했습니다.");
+    },
+    onError: (error) => toast.error(error.message || "원고를 승인하지 못했습니다."),
+  });
+  const reject = trpc.admin.rejectCreativeSubmission.useMutation({
+    onSuccess: async () => {
+      await utils.admin.creativeSubmissions.invalidate();
+      toast.success("원고를 미승인 처리했습니다.");
+    },
+    onError: (error) => toast.error(error.message || "원고를 처리하지 못했습니다."),
+  });
+
+  const handleApprove = (id: number, title: string) => {
+    if (window.confirm(`‘${title}’ 원고를 공개할까요? 승인하면 책방의 ‘창작’ 메뉴에 표시됩니다.`)) {
+      approve.mutate({ id });
+    }
+  };
+
+  const handleReject = (id: number) => {
+    if (window.confirm("이 원고를 미승인 처리할까요? 작성자는 검수 의견을 확인할 수 있습니다.")) {
+      reject.mutate({ id, note: reviewNotes[id]?.trim() || undefined });
+    }
+  };
+
+  return (
+    <section className="space-y-4">
+      <div className="rounded-lg border border-border bg-card p-5">
+        <h2 className="text-lg font-bold">회원 창작 원고 검수</h2>
+        <p className="mt-1 text-sm text-muted-foreground">아래 원고는 작성자와 관리자만 볼 수 있습니다. 승인한 작품만 공개 도서 목록에 올라갑니다.</p>
+      </div>
+      {isLoading ? (
+        <div className="py-12 text-center text-muted-foreground">원고 목록을 불러오는 중...</div>
+      ) : submissions?.length ? (
+        submissions.map((submission) => (
+          <article key={submission.id} className="rounded-xl border border-border bg-card p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-lg font-bold font-serif">{submission.title}</h3>
+                  <span className="rounded bg-secondary px-2 py-0.5 text-xs">{CREATIVE_GENRE_LABELS[submission.genre]}</span>
+                </div>
+                <p className="mt-1 text-sm text-muted-foreground">작가명: {submission.authorName} · 제출자: {submission.submitterName || "회원"}{submission.submitterEmail ? ` (${submission.submitterEmail})` : ""}</p>
+                <p className="mt-1 text-xs text-muted-foreground">접수: {submission.createdAt.toLocaleString("ko-KR")}</p>
+              </div>
+              <Button size="sm" onClick={() => handleApprove(submission.id, submission.title)} disabled={approve.isPending || reject.isPending}>
+                <Check className="mr-1 h-4 w-4" /> 승인하고 공개
+              </Button>
+            </div>
+            {submission.description && <p className="mt-4 rounded-lg bg-secondary/40 p-3 text-sm">{submission.description}</p>}
+            <details className="mt-4 rounded-lg border border-border">
+              <summary className="cursor-pointer px-4 py-3 text-sm font-medium">원고 본문 보기</summary>
+              <div className="max-h-[32rem] overflow-y-auto border-t border-border px-4 py-3 text-sm leading-7 whitespace-pre-wrap">{submission.content}</div>
+            </details>
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+              <Input maxLength={2000} placeholder="미승인 시 작성자에게 전달할 검수 의견 (선택)" value={reviewNotes[submission.id] || ""} onChange={(e) => setReviewNotes({ ...reviewNotes, [submission.id]: e.target.value })} />
+              <Button variant="outline" className="shrink-0" onClick={() => handleReject(submission.id)} disabled={approve.isPending || reject.isPending}>
+                <Ban className="mr-1 h-4 w-4" /> 미승인
+              </Button>
+            </div>
+          </article>
+        ))
+      ) : (
+        <div className="rounded-xl border border-dashed border-border py-12 text-center text-sm text-muted-foreground">검수 대기 중인 원고가 없습니다.</div>
+      )}
+    </section>
   );
 }
 

@@ -8,6 +8,7 @@ import Home from "./pages/Home";
 import Reader from "./pages/Reader";
 import Admin from "./pages/Admin";
 import Bookshelf from "./pages/Bookshelf";
+import Creative from "./pages/Creative";
 import Login from "./pages/Login";
 import ResetPassword from "./pages/ResetPassword";
 import { trpc } from "@/lib/trpc";
@@ -21,6 +22,7 @@ function Router() {
       <Route path={"/read/:id"} component={Reader} />
       <Route path={"/admin"} component={Admin} />
       <Route path={"/bookshelf"} component={Bookshelf} />
+      <Route path={"/creative"} component={Creative} />
       <Route path={"/login"} component={Login} />
       <Route path={"/reset-password"} component={ResetPassword} />
       <Route path={"/404"} component={NotFound} />

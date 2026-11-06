@@ -6,21 +6,24 @@ import { booksQueryOptions, getBookCountLabel, shouldShowEmptyBooks } from "@/li
 import { getSupabaseLoginRoute } from "@/lib/authNavigation";
 import { BRAND_LOGO_URL } from "@/lib/brand";
 import { WEBTOON_SITE_URL } from "@/lib/externalLinks";
+import { CREATIVE_GENRES, CREATIVE_GENRE_LABELS, type CreativeGenre } from "@shared/creative";
 import { useState, useCallback } from "react";
 import { Link, useLocation } from "wouter";
-import { BookOpen, Heart, Search, Youtube, LogIn, LogOut, Settings, List, X, Library, BookImage, Palette } from "lucide-react";
+import { BookOpen, Heart, Search, Youtube, LogIn, LogOut, Settings, List, X, Library, BookImage, Palette, PenLine } from "lucide-react";
 
 const GENRES = [
   { value: undefined, label: "전체" },
   { value: "classic" as const, label: "고전" },
   { value: "modern" as const, label: "현대" },
   { value: "foreign" as const, label: "해외" },
+  { value: "creative" as const, label: "창작" },
 ];
 
 export default function Home() {
   const { user, isAuthenticated, logout } = useAuth();
   const [, navigate] = useLocation();
-  const [genre, setGenre] = useState<"classic" | "modern" | "foreign" | undefined>(undefined);
+  const [genre, setGenre] = useState<"classic" | "modern" | "foreign" | "creative" | undefined>(undefined);
+  const [creativeGenre, setCreativeGenre] = useState<CreativeGenre | undefined>(undefined);
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [showDonation, setShowDonation] = useState(false);
@@ -30,7 +33,7 @@ export default function Home() {
   const { data: allBooks, isError: allBooksError, refetch: refetchAllBooks } = trpc.books.list.useQuery({}, booksQueryOptions);
 
   const { data: books, isLoading, isError: booksError, refetch: refetchBooks } = trpc.books.list.useQuery(
-    { genre, search: search || undefined },
+    { genre, creativeGenre: genre === "creative" ? creativeGenre : undefined, search: search || undefined },
     booksQueryOptions,
   );
   const { data: donation } = trpc.donation.get.useQuery();
@@ -128,6 +131,20 @@ export default function Home() {
             </Button>
           ))}
         </div>
+        {genre === "creative" && (
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <span className="text-sm text-muted-foreground mr-1">장르:</span>
+            <Button size="sm" variant={creativeGenre === undefined ? "secondary" : "outline"} onClick={() => setCreativeGenre(undefined)}>전체</Button>
+            {CREATIVE_GENRES.map((item) => (
+              <Button key={item.value} size="sm" variant={creativeGenre === item.value ? "secondary" : "outline"} onClick={() => setCreativeGenre(item.value)}>
+                {item.label}
+              </Button>
+            ))}
+            <Link href="/creative">
+              <Button size="sm" className="ml-1"><PenLine className="w-4 h-4 mr-1" />내 글 올리기</Button>
+            </Link>
+          </div>
+        )}
       </section>
 
       {/* Book Grid */}
@@ -152,8 +169,13 @@ export default function Home() {
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <span className="text-xs px-2 py-0.5 rounded bg-secondary text-secondary-foreground">
-                      {book.genre === "classic" ? "고전" : book.genre === "modern" ? "현대" : "해외"}
+                      {book.genre === "classic" ? "고전" : book.genre === "modern" ? "현대" : book.genre === "creative" ? "창작" : "해외"}
                     </span>
+                    {book.genre === "creative" && book.creativeGenre && (
+                      <span className="text-xs px-2 py-0.5 rounded bg-primary/10 text-primary">
+                        {CREATIVE_GENRE_LABELS[book.creativeGenre]}
+                      </span>
+                    )}
                     <span className="text-sm text-muted-foreground">{book.author}</span>
                   </div>
                 </div>
@@ -240,6 +262,8 @@ export default function Home() {
                       ? "bg-amber-50 border-amber-200 hover:bg-amber-100"
                       : book.genre === "modern"
                       ? "bg-emerald-50 border-emerald-200 hover:bg-emerald-100"
+                      : book.genre === "creative"
+                      ? "bg-violet-50 border-violet-200 hover:bg-violet-100"
                       : "bg-sky-50 border-sky-200 hover:bg-sky-100";
                     return (
                       <Link
