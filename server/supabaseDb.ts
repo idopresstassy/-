@@ -30,7 +30,10 @@ function bookPayload(data: Record<string, unknown>) {
 }
 
 export async function getBooks(filter?: { genre?: Genre; search?: string; creativeGenre?: CreativeGenre }) {
-  let query = getSupabaseAdmin().from("books").select(bookSelect).order("created_at");
+  let query = getSupabaseAdmin().from("books").select(bookSelect);
+  query = filter?.genre === "creative"
+    ? query.order("created_at", { ascending: false }).order("id", { ascending: false })
+    : query.order("created_at");
   if (filter?.genre) query = query.eq("genre", filter.genre);
   if (filter?.creativeGenre) query = query.eq("creative_genre", filter.creativeGenre);
   if (filter?.search?.trim()) query = query.or(`title.ilike.%${filter.search.trim()}%,author.ilike.%${filter.search.trim()}%`);
