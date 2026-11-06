@@ -1,14 +1,17 @@
 import { getSupabaseAdmin } from "./supabase";
 
-export type Genre = "classic" | "modern" | "foreign";
+import type { CreativeGenre } from "../shared/creative";
+
+export type Genre = "classic" | "modern" | "foreign" | "creative";
 type UserId = string;
 type BookRecord = {
   id: number; title: string; author: string; genre: Genre; content: string | null;
   description: string | null; coverUrl: string | null; youtubeUrl: string | null;
   audioUrl: string | null; webtoonUrl: string | null; googleDriveUrl: string | null;
   tableOfContents: string | null; studyMaterial: string | null; createdAt: Date; updatedAt: Date;
+  creativeGenre: CreativeGenre | null;
 };
-const bookSelect = "id,title,author,genre,content,description,cover_url,youtube_url,audio_url,webtoon_url,source_url,table_of_contents,study_material,created_at,updated_at";
+const bookSelect = "id,title,author,genre,creative_genre,content,description,cover_url,youtube_url,audio_url,webtoon_url,source_url,table_of_contents,study_material,created_at,updated_at";
 const asDate = (value: string | null | undefined) => value ? new Date(value) : new Date();
 const fail = (error: unknown) => { if (error) throw error; };
 
@@ -17,26 +20,112 @@ function book(row: any): BookRecord {
     content: row.content ?? null, description: row.description ?? null, coverUrl: row.cover_url ?? null,
     youtubeUrl: row.youtube_url ?? null, audioUrl: row.audio_url ?? null, webtoonUrl: row.webtoon_url ?? null,
     googleDriveUrl: row.source_url ?? null, tableOfContents: row.table_of_contents ?? null,
-    studyMaterial: row.study_material ?? null, createdAt: asDate(row.created_at), updatedAt: asDate(row.updated_at) };
+    studyMaterial: row.study_material ?? null, creativeGenre: row.creative_genre ?? null,
+    createdAt: asDate(row.created_at), updatedAt: asDate(row.updated_at) };
 }
 
 function bookPayload(data: Record<string, unknown>) {
-  const names: Record<string, string> = { youtubeUrl: "youtube_url", audioUrl: "audio_url", webtoonUrl: "webtoon_url", googleDriveUrl: "source_url", tableOfContents: "table_of_contents", studyMaterial: "study_material", coverUrl: "cover_url" };
+  const names: Record<string, string> = { youtubeUrl: "youtube_url", audioUrl: "audio_url", webtoonUrl: "webtoon_url", googleDriveUrl: "source_url", tableOfContents: "table_of_contents", studyMaterial: "study_material", coverUrl: "cover_url", creativeGenre: "creative_genre" };
   return Object.fromEntries(Object.entries(data).map(([key, value]) => [names[key] ?? key, value]));
 }
 
-export async function getBooks(filter?: { genre?: Genre; search?: string }) {
+export async function getBooks(filter?: { genre?: Genre; search?: string; creativeGenre?: CreativeGenre }) {
   let query = getSupabaseAdmin().from("books").select(bookSelect).order("created_at");
   if (filter?.genre) query = query.eq("genre", filter.genre);
+  if (filter?.creativeGenre) query = query.eq("creative_genre", filter.creativeGenre);
   if (filter?.search?.trim()) query = query.or(`title.ilike.%${filter.search.trim()}%,author.ilike.%${filter.search.trim()}%`);
   const { data, error } = await query; fail(error); return (data ?? []).map(book);
 }
 export async function getBookById(id: number) { const { data, error } = await getSupabaseAdmin().from("books").select(bookSelect).eq("id", id).maybeSingle(); fail(error); return data ? book(data) : undefined; }
 export async function getBookByTitleAuthor(title: string, author: string) { const { data, error } = await getSupabaseAdmin().from("books").select(bookSelect).eq("title", title).eq("author", author).maybeSingle(); fail(error); return data ? book(data) : undefined; }
-export async function createBook(data: { title: string; author: string; genre: Genre; content?: string; description?: string; youtubeUrl?: string; audioUrl?: string; googleDriveUrl?: string; tableOfContents?: string; studyMaterial?: string; webtoonUrl?: string; coverUrl?: string }) { const { data: row, error } = await getSupabaseAdmin().from("books").insert(bookPayload(data)).select("id").single(); fail(error); return Number(row?.id); }
+export async function createBook(data: { title: string; author: string; genre: Genre; content?: string; description?: string; youtubeUrl?: string; audioUrl?: string; googleDriveUrl?: string; tableOfContents?: string; studyMaterial?: string; webtoonUrl?: string; coverUrl?: string; creativeGenre?: CreativeGenre }) { const { data: row, error } = await getSupabaseAdmin().from("books").insert(bookPayload(data)).select("id").single(); fail(error); return Number(row?.id); }
 export async function updateBook(id: number, data: Record<string, unknown>) { const { error } = await getSupabaseAdmin().from("books").update(bookPayload(data)).eq("id", id); fail(error); }
 export async function upsertBook(data: Parameters<typeof createBook>[0]) { const old = await getBookByTitleAuthor(data.title, data.author); if (old) { await updateBook(old.id, data); return { id: old.id, isUpdate: true }; } return { id: await createBook(data), isUpdate: false }; }
 export async function deleteBook(id: number) { const db = getSupabaseAdmin(); await Promise.all([db.from("bookmarks").delete().eq("book_id", id), db.from("reading_progress").delete().eq("book_id", id), db.from("bookshelf").delete().eq("book_id", id), db.from("book_views").delete().eq("book_id", id)]); const { error } = await db.from("books").delete().eq("id", id); fail(error); }
+
+export type CreativeSubmissionStatus = "pending" | "approved" | "rejected";
+export type CreativeSubmission = {
+  id: number;
+  userId: string;
+  title: string;
+  authorName: string;
+  genre: CreativeGenre;
+  description: string | null;
+  content: string;
+  status: CreativeSubmissionStatus;
+  reviewNote: string | null;
+  createdAt: Date;
+  reviewedAt: Date | null;
+};
+
+const submissionSelect = "id,user_id,title,author_name,genre,description,content,status,review_note,created_at,reviewed_at";
+function creativeSubmission(row: any): CreativeSubmission {
+  return {
+    id: Number(row.id), userId: row.user_id, title: row.title, authorName: row.author_name,
+    genre: row.genre as CreativeGenre, description: row.description ?? null, content: row.content,
+    status: row.status as CreativeSubmissionStatus, reviewNote: row.review_note ?? null,
+    createdAt: asDate(row.created_at), reviewedAt: row.reviewed_at ? asDate(row.reviewed_at) : null,
+  };
+}
+
+export async function createCreativeSubmission(input: {
+  userId: UserId; title: string; authorName: string; genre: CreativeGenre;
+  description?: string; content: string;
+}) {
+  const supabase = getSupabaseAdmin();
+  const { count, error: countError } = await supabase.from("creative_submissions")
+    .select("id", { count: "exact", head: true }).eq("user_id", input.userId).eq("status", "pending");
+  fail(countError);
+  if ((count ?? 0) >= 5) throw new Error("검수 대기 중인 원고는 한 번에 5편까지 제출할 수 있습니다.");
+  const { data, error } = await supabase.from("creative_submissions").insert({
+    user_id: input.userId, title: input.title, author_name: input.authorName,
+    genre: input.genre, description: input.description?.trim() || null,
+    content: input.content, rights_confirmed_at: new Date().toISOString(),
+  }).select("id").single();
+  fail(error);
+  if (!data) throw new Error("원고를 저장하지 못했습니다.");
+  return Number(data.id);
+}
+
+export async function getCreativeSubmissionsByUser(userId: UserId) {
+  const { data, error } = await getSupabaseAdmin().from("creative_submissions")
+    .select("id,title,author_name,genre,status,review_note,created_at,reviewed_at")
+    .eq("user_id", userId).order("created_at", { ascending: false });
+  fail(error);
+  return (data ?? []).map((row: any) => ({
+    id: Number(row.id), title: row.title, authorName: row.author_name,
+    genre: row.genre as CreativeGenre, status: row.status as CreativeSubmissionStatus,
+    reviewNote: row.review_note ?? null, createdAt: asDate(row.created_at),
+    reviewedAt: row.reviewed_at ? asDate(row.reviewed_at) : null,
+  }));
+}
+
+export async function getPendingCreativeSubmissions() {
+  const { data, error } = await getSupabaseAdmin().from("creative_submissions")
+    .select(`${submissionSelect},profiles!creative_submissions_user_id_fkey(name,email)`)
+    .eq("status", "pending").order("created_at", { ascending: true });
+  fail(error);
+  return (data ?? []).map((row: any) => ({
+    ...creativeSubmission(row), submitterName: row.profiles?.name ?? null,
+    submitterEmail: row.profiles?.email ?? null,
+  }));
+}
+
+export async function approveCreativeSubmission(id: number, reviewerId: UserId) {
+  const { data, error } = await getSupabaseAdmin().rpc("approve_creative_submission", {
+    p_submission_id: id, p_reviewed_by: reviewerId,
+  });
+  fail(error);
+  return Number(data);
+}
+
+export async function rejectCreativeSubmission(id: number, reviewerId: UserId, note?: string) {
+  const { data, error } = await getSupabaseAdmin().from("creative_submissions")
+    .update({ status: "rejected", review_note: note?.trim() || null, reviewed_by: reviewerId, reviewed_at: new Date().toISOString() })
+    .eq("id", id).eq("status", "pending").select("id").maybeSingle();
+  fail(error);
+  if (!data) throw new Error("이미 검수되었거나 원고를 찾을 수 없습니다.");
+}
 
 export async function getDonationInfo() { const { data, error } = await getSupabaseAdmin().from("donation_info").select("*").order("id").limit(1).maybeSingle(); fail(error); return data ? { id: Number(data.id), bankName: data.bank_name, accountNumber: data.account_number, accountHolder: data.account_holder, description: data.description, email: data.email, representative: data.representative, closingMessage: data.closing_message, legalNotice: data.legal_notice, updatedAt: asDate(data.updated_at) } : undefined; }
 export async function upsertDonationInfo(data: Record<string, unknown>) { const names: Record<string, string> = { bankName: "bank_name", accountNumber: "account_number", accountHolder: "account_holder", closingMessage: "closing_message", legalNotice: "legal_notice" }; const payload = Object.fromEntries(Object.entries(data).map(([k, v]) => [names[k] ?? k, v])); const old = await getDonationInfo(); const { error } = old ? await getSupabaseAdmin().from("donation_info").update(payload).eq("id", old.id) : await getSupabaseAdmin().from("donation_info").insert(payload); fail(error); }

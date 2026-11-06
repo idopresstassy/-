@@ -13,7 +13,8 @@ export const appRouter = router({
   books: router({
     list: publicProcedure
       .input(z.object({
-        genre: z.enum(["classic", "modern", "foreign"]).optional(),
+        genre: z.enum(["classic", "modern", "foreign", "creative"]).optional(),
+        creativeGenre: z.enum(["short_story", "romance", "fantasy", "wuxia", "mystery", "other"]).optional(),
         search: z.string().optional(),
       }).optional())
       .query(async ({ input }) => {
@@ -32,12 +33,15 @@ export const appRouter = router({
       .input(z.object({
         title: z.string().min(1),
         author: z.string().min(1),
-        genre: z.enum(["classic", "modern", "foreign"]),
+        genre: z.enum(["classic", "modern", "foreign", "creative"]),
+        creativeGenre: z.enum(["short_story", "romance", "fantasy", "wuxia", "mystery", "other"]).optional(),
         content: z.string().optional(),
         description: z.string().optional(),
         youtubeUrl: z.string().optional(),
         googleDriveUrl: z.string().optional(),
         webtoonUrl: z.string().optional(),
+      }).refine((value) => value.genre !== "creative" || Boolean(value.creativeGenre), {
+        message: "창작 도서는 작품 장르를 선택해야 합니다.", path: ["creativeGenre"],
       }))
       .mutation(async ({ input }) => {
         const { id, isUpdate } = await db.upsertBook(input);
@@ -49,7 +53,8 @@ export const appRouter = router({
        id: z.number(),
        title: z.string().min(1).optional(),
        author: z.string().min(1).optional(),
-       genre: z.enum(["classic", "modern", "foreign"]).optional(),
+       genre: z.enum(["classic", "modern", "foreign", "creative"]).optional(),
+       creativeGenre: z.enum(["short_story", "romance", "fantasy", "wuxia", "mystery", "other"]).nullable().optional(),
        content: z.string().optional(),
        description: z.string().optional(),
        youtubeUrl: z.string().optional(),
@@ -88,6 +93,36 @@ export const appRouter = router({
         await db.deleteBook(input.id);
         return { success: true };
       }),
+  }),
+
+  creative: router({
+    submit: protectedProcedure
+      .input(z.object({
+        title: z.string().trim().min(1).max(200),
+        authorName: z.string().trim().min(1).max(120),
+        genre: z.enum(["short_story", "romance", "fantasy", "wuxia", "mystery", "other"]),
+        description: z.string().trim().max(2000).optional(),
+        content: z.string().trim().min(20).max(500000),
+        rightsConfirmed: z.literal(true),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        try {
+          const id = await db.createCreativeSubmission({
+            userId: ctx.user.id, title: input.title, authorName: input.authorName,
+            genre: input.genre, description: input.description, content: input.content,
+          });
+          return { id };
+        } catch (error) {
+          if (error instanceof Error && error.message.includes("검수 대기")) {
+            throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: error.message });
+          }
+          throw error;
+        }
+      }),
+
+    mine: protectedProcedure.query(async ({ ctx }) => {
+      return await db.getCreativeSubmissionsByUser(ctx.user.id);
+    }),
   }),
 
   donation: router({
@@ -188,6 +223,24 @@ export const appRouter = router({
     users: adminProcedure.query(async () => {
       return await db.getAllUsers();
     }),
+
+    creativeSubmissions: adminProcedure.query(async () => {
+      return await db.getPendingCreativeSubmissions();
+    }),
+
+    approveCreativeSubmission: adminProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const bookId = await db.approveCreativeSubmission(input.id, ctx.user.id);
+        return { bookId };
+      }),
+
+    rejectCreativeSubmission: adminProcedure
+      .input(z.object({ id: z.number().int().positive(), note: z.string().trim().max(2000).optional() }))
+      .mutation(async ({ ctx, input }) => {
+        await db.rejectCreativeSubmission(input.id, ctx.user.id, input.note);
+        return { success: true };
+      }),
 
     userReadingHistory: adminProcedure
       .input(z.object({ userId: z.string().uuid() }))
