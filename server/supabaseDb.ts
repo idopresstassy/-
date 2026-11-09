@@ -30,7 +30,7 @@ function bookPayload(data: Record<string, unknown>) {
 }
 
 export async function getBooks(filter?: { genre?: Genre; search?: string; creativeGenre?: CreativeGenre }) {
-  let query = getSupabaseAdmin().from("books").select(bookSelect);
+  let query = getSupabaseAdmin().from("books").select(bookSelect.replace(",content,", ",")).eq("is_public", true);
   query = filter?.genre === "creative"
     ? query.order("created_at", { ascending: false }).order("id", { ascending: false })
     : query.order("created_at");
@@ -39,7 +39,11 @@ export async function getBooks(filter?: { genre?: Genre; search?: string; creati
   if (filter?.search?.trim()) query = query.or(`title.ilike.%${filter.search.trim()}%,author.ilike.%${filter.search.trim()}%`);
   const { data, error } = await query; fail(error); return (data ?? []).map(book);
 }
-export async function getBookById(id: number) { const { data, error } = await getSupabaseAdmin().from("books").select(bookSelect).eq("id", id).maybeSingle(); fail(error); return data ? book(data) : undefined; }
+export async function getBookById(id: number, includeHidden = false) {
+  let query = getSupabaseAdmin().from("books").select(bookSelect).eq("id", id);
+  if (!includeHidden) query = query.eq("is_public", true);
+  const {data, error} = await query.maybeSingle(); fail(error); return data ? book(data) : undefined;
+}
 export async function getBookByTitleAuthor(title: string, author: string) { const { data, error } = await getSupabaseAdmin().from("books").select(bookSelect).eq("title", title).eq("author", author).maybeSingle(); fail(error); return data ? book(data) : undefined; }
 export async function createBook(data: { title: string; author: string; genre: Genre; content?: string; description?: string; youtubeUrl?: string; audioUrl?: string; googleDriveUrl?: string; tableOfContents?: string; studyMaterial?: string; webtoonUrl?: string; coverUrl?: string; creativeGenre?: CreativeGenre }) { const { data: row, error } = await getSupabaseAdmin().from("books").insert(bookPayload(data)).select("id").single(); fail(error); return Number(row?.id); }
 export async function updateBook(id: number, data: Record<string, unknown>) { const { error } = await getSupabaseAdmin().from("books").update(bookPayload(data)).eq("id", id); fail(error); }
@@ -92,11 +96,12 @@ export async function createCreativeSubmission(input: {
 
 export async function getCreativeSubmissionsByUser(userId: UserId) {
   const { data, error } = await getSupabaseAdmin().from("creative_submissions")
-    .select("id,title,author_name,genre,status,review_note,created_at,reviewed_at")
+    .select("id,title,author_name,genre,status,review_note,created_at,reviewed_at,published_book_id")
     .eq("user_id", userId).order("created_at", { ascending: false });
   fail(error);
   return (data ?? []).map((row: any) => ({
     id: Number(row.id), title: row.title, authorName: row.author_name,
+    publishedBookId: row.published_book_id ? Number(row.published_book_id) : null,
     genre: row.genre as CreativeGenre, status: row.status as CreativeSubmissionStatus,
     reviewNote: row.review_note ?? null, createdAt: asDate(row.created_at),
     reviewedAt: row.reviewed_at ? asDate(row.reviewed_at) : null,
@@ -120,6 +125,42 @@ export async function approveCreativeSubmission(id: number, reviewerId: UserId) 
   });
   fail(error);
   return Number(data);
+}
+
+export async function getOwnRejectedSubmission(id: number, userId: UserId) {
+  const { data, error } = await getSupabaseAdmin().from("creative_submissions")
+    .select(submissionSelect).eq("id", id).eq("user_id", userId).eq("status", "rejected").maybeSingle();
+  fail(error);
+  if (!data) throw new Error("수정 요청을 받은 본인의 원고만 수정할 수 있습니다.");
+  return creativeSubmission(data);
+}
+
+export async function resubmitCreativeSubmission(id: number, input: Parameters<typeof createCreativeSubmission>[0]) {
+  const { count, error: countError } = await getSupabaseAdmin().from("creative_submissions")
+    .select("id", { count: "exact", head: true }).eq("user_id", input.userId).eq("status", "pending");
+  fail(countError);
+  if ((count ?? 0) >= 5) throw new Error("검수 대기 중인 원고는 한 번에 5편까지 제출할 수 있습니다.");
+  const { data, error } = await getSupabaseAdmin().from("creative_submissions")
+    .update({ title: input.title, author_name: input.authorName, genre: input.genre,
+      description: input.description?.trim() || null, content: input.content, status: "pending",
+      review_note: null, reviewed_at: null, reviewed_by: null, rights_confirmed_at: new Date().toISOString() })
+    .eq("id", id).eq("user_id", input.userId).eq("status", "rejected").select("id").maybeSingle();
+  fail(error);
+  if (!data) throw new Error("수정 요청을 받은 본인의 원고만 다시 신청할 수 있습니다.");
+  return Number(data.id);
+}
+
+export async function getManagedCreativeBooks() {
+  const { data, error } = await getSupabaseAdmin().from("books")
+    .select("id,title,author,is_public").eq("genre", "creative").order("created_at", { ascending: false });
+  fail(error); return data ?? [];
+}
+
+export async function setCreativeBookVisibility(id: number, isPublic: boolean, reviewerId: UserId, note: string) {
+  const { error } = await getSupabaseAdmin().rpc("set_creative_book_visibility", {
+    p_book_id: id, p_is_public: isPublic, p_reviewed_by: reviewerId, p_note: note,
+  });
+  fail(error);
 }
 
 export async function rejectCreativeSubmission(id: number, reviewerId: UserId, note?: string) {
@@ -151,7 +192,7 @@ export async function getWeeklyVisitorCount() { const since = new Date(); since.
 export async function getMonthlyVisitorCount() { const since = new Date(); since.setDate(1); since.setHours(0, 0, 0, 0); return uniqueVisits(await visitsSince(since)); }
 export async function getYearlyVisitorCount() { const since = new Date(); since.setMonth(0, 1); since.setHours(0, 0, 0, 0); return uniqueVisits(await visitsSince(since)); }
 export async function getDailyVisitorCounts(days = 14) { const start = new Date(); start.setDate(start.getDate() - (days - 1)); start.setHours(0, 0, 0, 0); const grouped = new Map<string, Set<string>>(); (await visitsSince(start)).forEach((row: any) => { const kst = new Date(new Date(row.visited_at).getTime() + 9 * 3600000); const key = kst.toISOString().slice(0, 10); if (!grouped.has(key)) grouped.set(key, new Set()); grouped.get(key)!.add(row.session_id || String(row.id)); }); return Array.from({ length: days }, (_, i) => { const day = new Date(start); day.setDate(start.getDate() + i); const kst = new Date(day.getTime() + 9 * 3600000); const date = kst.toISOString().slice(0, 10); return { date, label: `${String(kst.getUTCMonth() + 1).padStart(2, "0")}/${String(kst.getUTCDate()).padStart(2, "0")}`, visitors: grouped.get(date)?.size ?? 0 }; }); }
-export async function getPopularBooks(limit = 10) { const db = getSupabaseAdmin(); const [{ data: books, error: bookError }, { data: views, error: viewError }] = await Promise.all([db.from("books").select("id,title,author"), db.from("book_views").select("book_id,viewer_id")]); fail(bookError); fail(viewError); const counts = new Map<number, Set<string>>(); (views ?? []).forEach((view: any) => { const id = Number(view.book_id); if (!counts.has(id)) counts.set(id, new Set()); counts.get(id)!.add(view.viewer_id); }); return (books ?? []).map((item: any) => ({ bookId: Number(item.id), title: item.title, author: item.author, readerCount: counts.get(Number(item.id))?.size ?? 0 })).filter((item) => item.readerCount > 0).sort((a, b) => b.readerCount - a.readerCount || a.title.localeCompare(b.title)).slice(0, limit); }
+export async function getPopularBooks(limit = 10) { const db = getSupabaseAdmin(); const [{ data: books, error: bookError }, { data: views, error: viewError }] = await Promise.all([db.from("books").select("id,title,author").eq("is_public", true), db.from("book_views").select("book_id,viewer_id")]); fail(bookError); fail(viewError); const counts = new Map<number, Set<string>>(); (views ?? []).forEach((view: any) => { const id = Number(view.book_id); if (!counts.has(id)) counts.set(id, new Set()); counts.get(id)!.add(view.viewer_id); }); return (books ?? []).map((item: any) => ({ bookId: Number(item.id), title: item.title, author: item.author, readerCount: counts.get(Number(item.id))?.size ?? 0 })).filter((item) => item.readerCount > 0).sort((a, b) => b.readerCount - a.readerCount || a.title.localeCompare(b.title)).slice(0, limit); }
 export async function recordBookView(bookId: number, viewerId: string, userId?: UserId) { const { error } = await getSupabaseAdmin().from("book_views").upsert({ book_id: bookId, viewer_id: viewerId, user_id: userId ?? null }, { onConflict: "book_id,viewer_id" }); fail(error); }
 export async function recordVisit(userId?: UserId, sessionId?: string) { const { error } = await getSupabaseAdmin().from("visits").insert({ user_id: userId ?? null, session_id: sessionId ?? null }); fail(error); }
 export async function getAllUsers() { const { data, error } = await getSupabaseAdmin().from("profiles").select("id,name,email,role,created_at,last_signed_in_at").order("created_at", { ascending: false }); fail(error); return (data ?? []).map((row: any) => ({ id: row.id, openId: row.id, name: row.name, email: row.email, role: row.role, createdAt: asDate(row.created_at), lastSignedIn: asDate(row.last_signed_in_at) })); }

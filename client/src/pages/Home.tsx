@@ -22,7 +22,7 @@ const GENRES = [
 export default function Home() {
   const { user, isAuthenticated, logout } = useAuth();
   const [, navigate] = useLocation();
-  const [genre, setGenre] = useState<"classic" | "modern" | "foreign" | "creative" | undefined>(undefined);
+  const [genre, setGenre] = useState<"classic" | "modern" | "foreign" | "creative" | undefined>(() => new URLSearchParams(window.location.search).get("genre") === "creative" ? "creative" : undefined);
   const [creativeGenre, setCreativeGenre] = useState<CreativeGenre | undefined>(undefined);
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
@@ -56,7 +56,7 @@ export default function Home() {
             </Link>
           </div>
           {/* Bottom row: Navigation */}
-          <div className="flex items-center justify-center gap-3 pb-2">
+          <div className="flex flex-wrap items-center justify-center gap-1 pb-2 sm:gap-3">
             <Link href="/bookshelf">
               <Button variant="ghost" size="sm">
                 <Library className="w-4 h-4 mr-1" /> 내 책장
@@ -102,13 +102,14 @@ export default function Home() {
         <div className="flex gap-2 items-center">
           <form onSubmit={handleSearch} className="flex gap-2 flex-1">
             <Input
+              aria-label="제목 또는 작가명 검색"
               placeholder="제목 또는 작가명으로 검색..."
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               className="flex-1"
             />
             <Button type="submit" size="sm">
-              <Search className="w-4 h-4" />
+              <Search className="w-4 h-4" /><span className="sr-only">검색</span>
             </Button>
           </form>
           <Button variant="outline" size="sm" onClick={() => setShowBookList(true)}>
@@ -132,7 +133,7 @@ export default function Home() {
           ))}
         </div>
         {genre === "creative" && (
-          <div className="mt-4 flex flex-wrap items-center gap-2">
+          <div className="mt-4 space-y-3"><p className="text-sm text-muted-foreground">회원들이 직접 쓴 작품입니다. 회원가입 없이 바로 읽을 수 있습니다.</p><div className="flex flex-wrap items-center gap-2">
             <span className="text-sm text-muted-foreground mr-1">장르:</span>
             <Button size="sm" variant={creativeGenre === undefined ? "secondary" : "outline"} onClick={() => setCreativeGenre(undefined)}>전체</Button>
             {CREATIVE_GENRES.map((item) => (
@@ -141,9 +142,9 @@ export default function Home() {
               </Button>
             ))}
             <Link href="/creative">
-              <Button size="sm" className="ml-1"><PenLine className="w-4 h-4 mr-1" />내 글 올리기</Button>
+              <Button size="sm" className="ml-1"><PenLine className="w-4 h-4 mr-1" />내 작품 올리기 · 내 작품 관리</Button>
             </Link>
-          </div>
+          </div></div>
         )}
       </section>
 
