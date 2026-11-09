@@ -23,8 +23,8 @@ export const appRouter = router({
 
     getById: publicProcedure
       .input(z.object({ id: z.number() }))
-      .query(async ({ input }) => {
-        const book = await db.getBookById(input.id);
+      .query(async ({ ctx, input }) => {
+        const book = await db.getBookById(input.id, ctx.user?.role === "admin");
         if (!book) throw new TRPCError({ code: "NOT_FOUND", message: "도서를 찾을 수 없습니다." });
         return book;
       }),
@@ -98,6 +98,7 @@ export const appRouter = router({
   creative: router({
     submit: protectedProcedure
       .input(z.object({
+        submissionId: z.number().int().positive().optional(),
         title: z.string().trim().min(1).max(200),
         authorName: z.string().trim().min(1).max(120),
         genre: z.enum(["short_story", "romance", "fantasy", "wuxia", "mystery", "other"]),
@@ -107,7 +108,10 @@ export const appRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
         try {
-          const id = await db.createCreativeSubmission({
+          const save = input.submissionId
+            ? (data: Parameters<typeof db.createCreativeSubmission>[0]) => db.resubmitCreativeSubmission(input.submissionId!, data)
+            : db.createCreativeSubmission;
+          const id = await save({
             userId: ctx.user.id, title: input.title, authorName: input.authorName,
             genre: input.genre, description: input.description, content: input.content,
           });
@@ -119,6 +123,9 @@ export const appRouter = router({
           throw error;
         }
       }),
+
+    rejected: protectedProcedure.input(z.object({ id: z.number().int().positive() }))
+      .query(({ctx, input}) => db.getOwnRejectedSubmission(input.id, ctx.user.id)),
 
     mine: protectedProcedure.query(async ({ ctx }) => {
       return await db.getCreativeSubmissionsByUser(ctx.user.id);
@@ -224,6 +231,15 @@ export const appRouter = router({
       return await db.getAllUsers();
     }),
 
+    creativeBooks: adminProcedure.query(() => db.getManagedCreativeBooks()),
+
+    setCreativeVisibility: adminProcedure
+      .input(z.object({ id: z.number().int().positive(), isPublic: z.boolean(), note: z.string().trim().min(1).max(2000) }))
+      .mutation(async ({ctx, input}) => {
+        await db.setCreativeBookVisibility(input.id, input.isPublic, ctx.user.id, input.note);
+        return {success: true};
+      }),
+
     creativeSubmissions: adminProcedure.query(async () => {
       return await db.getPendingCreativeSubmissions();
     }),
@@ -236,7 +252,7 @@ export const appRouter = router({
       }),
 
     rejectCreativeSubmission: adminProcedure
-      .input(z.object({ id: z.number().int().positive(), note: z.string().trim().max(2000).optional() }))
+      .input(z.object({ id: z.number().int().positive(), note: z.string().trim().min(1, "수정이 필요한 이유를 적어주세요.").max(2000) }))
       .mutation(async ({ ctx, input }) => {
         await db.rejectCreativeSubmission(input.id, ctx.user.id, input.note);
         return { success: true };

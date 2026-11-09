@@ -513,11 +513,16 @@ function BooksTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> }) {
 
 // ==================== CREATIVE REVIEW TAB ====================
 function CreativeReviewTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> }) {
-  const { data: submissions, isLoading } = trpc.admin.creativeSubmissions.useQuery();
+  const { data: submissions, isLoading, isError, refetch } = trpc.admin.creativeSubmissions.useQuery();
+  const managed = trpc.admin.creativeBooks.useQuery();
+  const visibility = trpc.admin.setCreativeVisibility.useMutation({
+    onSuccess: async () => { await Promise.all([managed.refetch(), utils.books.invalidate()]); toast.success("공개 상태를 변경했습니다."); },
+    onError: () => toast.error("공개 상태를 바꾸지 못했습니다. 다시 시도해 주세요."),
+  });
   const [reviewNotes, setReviewNotes] = useState<Record<number, string>>({});
   const approve = trpc.admin.approveCreativeSubmission.useMutation({
     onSuccess: async () => {
-      await Promise.all([utils.admin.creativeSubmissions.invalidate(), utils.books.list.invalidate()]);
+      await Promise.all([utils.admin.creativeSubmissions.invalidate(), utils.admin.creativeBooks.invalidate(), utils.books.list.invalidate()]);
       toast.success("원고를 승인하고 ‘창작’ 도서 목록에 공개했습니다.");
     },
     onError: (error) => toast.error(error.message || "원고를 승인하지 못했습니다."),
@@ -525,7 +530,7 @@ function CreativeReviewTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> 
   const reject = trpc.admin.rejectCreativeSubmission.useMutation({
     onSuccess: async () => {
       await utils.admin.creativeSubmissions.invalidate();
-      toast.success("원고를 미승인 처리했습니다.");
+      toast.success("작성자에게 수정 요청을 보냈습니다.");
     },
     onError: (error) => toast.error(error.message || "원고를 처리하지 못했습니다."),
   });
@@ -537,8 +542,9 @@ function CreativeReviewTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> 
   };
 
   const handleReject = (id: number) => {
-    if (window.confirm("이 원고를 미승인 처리할까요? 작성자는 검수 의견을 확인할 수 있습니다.")) {
-      reject.mutate({ id, note: reviewNotes[id]?.trim() || undefined });
+    if (!reviewNotes[id]?.trim()) { toast.error("수정이 필요한 이유를 적어주세요."); return; }
+    if (window.confirm("작성자에게 수정을 요청할까요? 이유를 확인한 뒤 고쳐서 다시 신청할 수 있습니다.")) {
+      reject.mutate({ id, note: reviewNotes[id]!.trim() });
     }
   };
 
@@ -548,7 +554,7 @@ function CreativeReviewTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> 
         <h2 className="text-lg font-bold">회원 창작 원고 검수</h2>
         <p className="mt-1 text-sm text-muted-foreground">아래 원고는 작성자와 관리자만 볼 수 있습니다. 승인한 작품만 공개 도서 목록에 올라갑니다.</p>
       </div>
-      {isLoading ? (
+      {isError ? <div role="alert" className="rounded border p-4">신청 원고를 불러오지 못했습니다. <Button variant="outline" onClick={() => refetch()}>다시 불러오기</Button></div> : isLoading ? (
         <div className="py-12 text-center text-muted-foreground">원고 목록을 불러오는 중...</div>
       ) : submissions?.length ? (
         submissions.map((submission) => (
@@ -572,9 +578,9 @@ function CreativeReviewTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> 
               <div className="max-h-[32rem] overflow-y-auto border-t border-border px-4 py-3 text-sm leading-7 whitespace-pre-wrap">{submission.content}</div>
             </details>
             <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-              <Input maxLength={2000} placeholder="미승인 시 작성자에게 전달할 검수 의견 (선택)" value={reviewNotes[submission.id] || ""} onChange={(e) => setReviewNotes({ ...reviewNotes, [submission.id]: e.target.value })} />
-              <Button variant="outline" className="shrink-0" onClick={() => handleReject(submission.id)} disabled={approve.isPending || reject.isPending}>
-                <Ban className="mr-1 h-4 w-4" /> 미승인
+              <Input maxLength={2000} placeholder="수정이 필요한 이유 (수정 요청 시 필수)" value={reviewNotes[submission.id] || ""} onChange={(e) => setReviewNotes({ ...reviewNotes, [submission.id]: e.target.value })} />
+              <Button variant="outline" className="shrink-0" onClick={() => handleReject(submission.id)} disabled={approve.isPending || reject.isPending || !reviewNotes[submission.id]?.trim()}>
+                <Ban className="mr-1 h-4 w-4" /> 수정 요청
               </Button>
             </div>
           </article>
@@ -582,6 +588,21 @@ function CreativeReviewTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> 
       ) : (
         <div className="rounded-xl border border-dashed border-border py-12 text-center text-sm text-muted-foreground">검수 대기 중인 원고가 없습니다.</div>
       )}
+      <div className="rounded-xl border p-5 space-y-3">
+        <h2 className="text-lg font-bold">게시한 창작 작품 관리</h2>
+        <p className="text-sm text-muted-foreground">게시 중단은 작품과 독서 기록을 삭제하지 않습니다. 다시 공개할 수도 있습니다.</p>
+        {managed.isLoading && <p>불러오는 중...</p>}
+        {managed.isError && <p role="alert">게시 작품을 불러오지 못했습니다. <Button variant="outline" onClick={() => managed.refetch()}>다시 불러오기</Button></p>}
+        {managed.data?.length === 0 && <p>게시한 창작 작품이 없습니다.</p>}
+        {managed.data?.map(item => <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 border-t pt-3">
+          <div><strong>{item.title}</strong> · {item.author}<span className="ml-2 text-sm">{item.is_public ? "공개 중" : "게시 중단"}</span></div>
+          <Button variant="outline" disabled={visibility.isPending} onClick={() => {
+            const note = window.prompt(`${item.is_public ? "게시 중단" : "다시 공개"} 이유를 적어주세요. 원고는 삭제되지 않습니다.`);
+            if (!note?.trim()) return;
+            visibility.mutate({id: Number(item.id), isPublic: !item.is_public, note: note.trim()});
+          }}>{item.is_public ? "게시 중단" : "다시 공개"}</Button>
+        </div>)}
+      </div>
     </section>
   );
 }
