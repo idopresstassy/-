@@ -27,8 +27,14 @@ import {
   List,
   BookOpen,
   X,
+  Volume2,
+  Play,
+  Pause,
+  SkipBack,
+  SkipForward,
 } from "lucide-react";
 import { useOfflineCache } from "@/hooks/useOfflineCache";
+import { cleanReaderAudioText, collectPageAudioSentences, splitReaderParagraph, type ReaderAudioSentence } from "@/lib/readerAudioText";
 
 type Theme = "light" | "dark" | "sepia" | "eink";
 
@@ -121,6 +127,12 @@ export default function Reader() {
     () => content.split("\n").filter((l) => l.trim()),
     [content]
   );
+  const displaySentences = useMemo(() => {
+    let nextId = 0;
+    return lines.map((line) => splitReaderParagraph(line).map((displayText) => ({
+      id: nextId++, displayText, text: displayText.trim(),
+    })));
+  }, [lines]);
 
   // TOC & Study Material
   const [showToc, setShowToc] = useState(false);
@@ -157,6 +169,21 @@ export default function Reader() {
 
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
+  const [showAudioPanel, setShowAudioPanel] = useState(false);
+  const [audioQueue, setAudioQueue] = useState<ReaderAudioSentence[]>([]);
+  const [audioIndex, setAudioIndex] = useState(0);
+  const [audioPage, setAudioPage] = useState(0);
+  const [audioRequest, setAudioRequest] = useState<{ page: number; sentenceId: number | null; nonce: number } | null>(null);
+  const [audioActiveSentenceId, setAudioActiveSentenceId] = useState<number | null>(null);
+  const [isAudioPlaying, setIsAudioPlaying] = useState(false);
+  const [isAudioLoading, setIsAudioLoading] = useState(false);
+  const [audioSpeed, setAudioSpeed] = useState(1);
+  const [audioUsesBrowserVoice, setAudioUsesBrowserVoice] = useState(false);
+  const audioElementRef = useRef<HTMLAudioElement>(null);
+  const audioPlayTokenRef = useRef(0);
+  const prefetchedPageRef = useRef<number | null>(null);
+  const audioProgressKey = `reader_audio_progress_${bookId}`;
+  const audioMutation = trpc.readerAudio.getOrCreate.useMutation();
   const [isTwoPageMode, setIsTwoPageMode] = useState(false);
   const [stride, setStride] = useState(0);
   const [containerWidth, setContainerWidth] = useState<number | null>(null);
@@ -424,6 +451,205 @@ export default function Reader() {
     setCurrentPage((prev) => (prev > 0 ? prev - 1 : prev));
   }, []);
 
+  const requestAudioPage = useCallback((page: number, sentenceId: number | null = null) => {
+    const safePage = Math.max(0, Math.min(page, totalPages - 1));
+    setShowAudioPanel(true);
+    setReadMode("page");
+    setCurrentPage(safePage);
+    setAudioQueue([]);
+    setAudioPage(safePage);
+    setAudioRequest({ page: safePage, sentenceId, nonce: Date.now() });
+  }, [totalPages]);
+
+  const startAudioFromSentence = useCallback((sentenceId: number) => {
+    if (readMode === "scroll") {
+      requestAudioPage(0, sentenceId);
+      return;
+    }
+    const spans = Array.from(contentRef.current?.querySelectorAll<HTMLElement>("[data-audio-sentence-id]") ?? []);
+    const target = spans.find((span) => Number(span.dataset.audioSentenceId) === sentenceId);
+    const paragraph = target?.closest<HTMLElement>("[data-line-index]");
+    const page = target && paragraph && contentRef.current && stride > 0
+      ? Math.floor(Math.max(0, target.getBoundingClientRect().left - contentRef.current.getBoundingClientRect().left) / stride)
+      : currentPage;
+    requestAudioPage(page, sentenceId);
+  }, [readMode, requestAudioPage, stride, currentPage]);
+
+  const pauseAudio = useCallback(() => {
+    setIsAudioPlaying(false);
+    setIsAudioLoading(false);
+    audioPlayTokenRef.current += 1;
+    audioElementRef.current?.pause();
+    window.speechSynthesis?.cancel();
+  }, []);
+
+  const toggleAudioPlayback = useCallback(() => {
+    if (isAudioPlaying) {
+      pauseAudio();
+      return;
+    }
+    if (audioQueue.length > 0) {
+      setIsAudioPlaying(true);
+      return;
+    }
+    let saved: { page?: number; sentenceId?: number } = {};
+    try { saved = JSON.parse(localStorage.getItem(audioProgressKey) || "{}"); } catch { /* Start from the current page. */ }
+    requestAudioPage(Number.isInteger(saved.page) ? Number(saved.page) : currentPage,
+      Number.isInteger(saved.sentenceId) ? Number(saved.sentenceId) : null);
+  }, [isAudioPlaying, pauseAudio, audioQueue.length, audioProgressKey, requestAudioPage, currentPage]);
+
+  const skipAudioSentence = useCallback((direction: -1 | 1) => {
+    if (audioQueue.length === 0) {
+      requestAudioPage(currentPage);
+      return;
+    }
+    const target = audioIndex + direction;
+    if (target >= 0 && target < audioQueue.length) {
+      setAudioIndex(target);
+      setAudioActiveSentenceId(audioQueue[target].id);
+      setIsAudioPlaying(true);
+      return;
+    }
+    const page = audioPage + direction;
+    if (page >= 0 && page < totalPages) {
+      requestAudioPage(page, direction < 0 ? -1 : null);
+      setIsAudioPlaying(true);
+    }
+  }, [audioQueue, audioIndex, audioPage, currentPage, totalPages, requestAudioPage]);
+
+  const renderAudioLine = useCallback((line: string, lineIndex: number) => (
+    <p key={lineIndex} data-line-index={lineIndex} className="mb-4 sm:mb-6" style={{ textIndent: "1em" }}>
+      {displaySentences[lineIndex]?.map((sentence) => (
+        <span
+          key={sentence.id}
+          data-audio-sentence-id={sentence.id}
+          data-audio-text={cleanReaderAudioText(sentence.text)}
+          onClick={() => startAudioFromSentence(sentence.id)}
+          className="relative z-20 cursor-pointer rounded-sm transition-colors"
+          style={audioActiveSentenceId === sentence.id ? { backgroundColor: "#fde047", color: "#111827", boxShadow: "0 0 0 2px #fde047" } : undefined}
+        >{sentence.displayText}</span>
+      )) ?? line}
+    </p>
+  ), [displaySentences, startAudioFromSentence, audioActiveSentenceId]);
+
+  // Prepare the page queue from the same sentence spans rendered by the reader.
+  useEffect(() => {
+    if (!audioRequest || audioRequest.page !== currentPage || stride <= 0 || !isReady) return;
+    let cancelled = false;
+    let firstFrame = 0;
+    let secondFrame = 0;
+    firstFrame = requestAnimationFrame(() => {
+      secondFrame = requestAnimationFrame(() => {
+        if (cancelled) return;
+        const rows = collectPageAudioSentences(contentRef.current, audioRequest.page, stride);
+        const found = audioRequest.sentenceId === null ? 0 : rows.findIndex((row) => row.id === audioRequest.sentenceId);
+        const index = audioRequest.sentenceId === -1 ? Math.max(0, rows.length - 1) : Math.max(0, found);
+        setAudioQueue(rows);
+        setAudioPage(audioRequest.page);
+        setAudioIndex(index);
+        setAudioActiveSentenceId(rows[index]?.id ?? null);
+        setAudioRequest(null);
+        setIsAudioPlaying(rows.length > 0);
+        if (rows.length === 0) setIsAudioLoading(false);
+      });
+    });
+    return () => { cancelled = true; cancelAnimationFrame(firstFrame); cancelAnimationFrame(secondFrame); };
+  }, [audioRequest, currentPage, stride, isReady]);
+
+  const advanceAudio = useCallback(() => {
+    if (audioIndex + 1 < audioQueue.length) {
+      setAudioIndex((index) => index + 1);
+      setAudioActiveSentenceId(audioQueue[audioIndex + 1].id);
+      return;
+    }
+    if (audioPage + 1 < totalPages) {
+      setCurrentPage(audioPage + 1);
+      setAudioQueue([]);
+      setAudioRequest({ page: audioPage + 1, sentenceId: null, nonce: Date.now() });
+      return;
+    }
+    setIsAudioPlaying(false);
+    setAudioActiveSentenceId(null);
+    setIsAudioLoading(false);
+  }, [audioIndex, audioQueue, audioPage, totalPages]);
+
+  // Synthesize or reuse one sentence at a time. Quota/service failures use the browser voice.
+  useEffect(() => {
+    if (!isAudioPlaying || !audioQueue[audioIndex]) return;
+    const item = audioQueue[audioIndex];
+    const audio = audioElementRef.current;
+    const token = ++audioPlayTokenRef.current;
+    let cancelled = false;
+    const stillCurrent = () => !cancelled && token === audioPlayTokenRef.current;
+    const speakInBrowser = () => {
+      if (!stillCurrent()) return;
+      setAudioUsesBrowserVoice(true);
+      setIsAudioLoading(false);
+      const utterance = new SpeechSynthesisUtterance(item.text);
+      utterance.lang = "ko-KR";
+      utterance.rate = audioSpeed;
+      utterance.onend = () => { if (stillCurrent()) advanceAudio(); };
+      utterance.onerror = () => { if (stillCurrent()) advanceAudio(); };
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utterance);
+    };
+    setAudioActiveSentenceId(item.id);
+    setIsAudioLoading(true);
+    audioMutation.mutateAsync({
+      bookId, pageNumber: item.pageNumber, sentenceNumber: item.sentenceNumber, text: item.text,
+    }).then((result) => {
+      if (!stillCurrent()) return;
+      if (result.fallback) { speakInBrowser(); return; }
+      if (!audio) { speakInBrowser(); return; }
+      setAudioUsesBrowserVoice(false);
+      audio.src = result.audioUrl;
+      audio.playbackRate = audioSpeed;
+      audio.onended = () => { if (stillCurrent()) advanceAudio(); };
+      audio.onerror = speakInBrowser;
+      setIsAudioLoading(false);
+      void audio.play().catch(speakInBrowser);
+    }).catch(speakInBrowser);
+    return () => {
+      cancelled = true;
+      if (audio) { audio.pause(); audio.onended = null; audio.onerror = null; }
+      window.speechSynthesis?.cancel();
+    };
+  }, [isAudioPlaying, audioQueue, audioIndex, audioSpeed, bookId, audioMutation.mutateAsync, advanceAudio]);
+
+  // Keep a single next page warm while this page is being heard; never synthesize the whole book.
+  useEffect(() => {
+    if (!isAudioPlaying || audioQueue.length === 0 || audioPage + 1 >= totalPages || stride <= 0) return;
+    const nextPage = audioPage + 1;
+    if (prefetchedPageRef.current === nextPage) return;
+    let cancelled = false;
+    const frame = requestAnimationFrame(async () => {
+      const rows = collectPageAudioSentences(contentRef.current, nextPage, stride);
+      if (rows.length === 0) return;
+      prefetchedPageRef.current = nextPage;
+      for (const row of rows) {
+        if (cancelled) break;
+        try {
+          const result = await audioMutation.mutateAsync({
+            bookId, pageNumber: row.pageNumber, sentenceNumber: row.sentenceNumber, text: row.text,
+          });
+          if (result.fallback) break;
+        } catch { break; }
+      }
+    });
+    return () => { cancelled = true; cancelAnimationFrame(frame); };
+  }, [isAudioPlaying, audioQueue.length, audioPage, totalPages, stride, bookId, audioMutation.mutateAsync]);
+
+  useEffect(() => {
+    if (!isAudioPlaying || !audioQueue[audioIndex]) return;
+    localStorage.setItem(audioProgressKey, JSON.stringify({ page: audioPage, sentenceId: audioQueue[audioIndex].id }));
+  }, [isAudioPlaying, audioQueue, audioIndex, audioProgressKey, audioPage]);
+
+  useEffect(() => () => {
+    audioPlayTokenRef.current += 1;
+    audioElementRef.current?.pause();
+    window.speechSynthesis?.cancel();
+  }, []);
+
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -569,6 +795,14 @@ export default function Reader() {
         </div>
 
         <div className="flex items-center gap-1">
+          <button
+            onClick={() => setShowAudioPanel((visible) => !visible)}
+            className={`p-2 hover:bg-black/5 rounded-full transition-colors ${showAudioPanel ? "text-amber-600" : ""}`}
+            title="오디오 낭독"
+            aria-label="오디오 낭독"
+          >
+            <Volume2 className="w-5 h-5" />
+          </button>
           {tocItems.length > 0 && (
             <button
               onClick={() => { setShowToc(!showToc); setShowStudyMaterial(false); setShowSettings(false); }}
@@ -625,6 +859,7 @@ export default function Reader() {
           </button>
         </div>
       </header>
+      <audio ref={audioElementRef} preload="none" className="hidden" />
 
       {/* TOC Panel */}
       <AnimatePresence>
@@ -913,15 +1148,7 @@ export default function Reader() {
                 lineHeight: lineHeight,
               }}
             >
-              {lines.map((line, idx) => (
-                <p
-                  key={idx}
-                  className="mb-6"
-                  style={{ textIndent: "1em" }}
-                >
-                  {line}
-                </p>
-              ))}
+              {lines.map((line, idx) => renderAudioLine(line, idx))}
             </div>
             <div className="h-20 flex items-center justify-center opacity-30">
               <p className="text-sm font-sans">- 끝 -</p>
@@ -997,16 +1224,7 @@ export default function Reader() {
                       <h2 className="text-xl sm:text-2xl font-bold mb-2 sm:mb-4">{displayTitle}</h2>
                       <div className="w-10 h-1 bg-black mx-auto opacity-30"></div>
                     </div>
-                    {lines.map((line, idx) => (
-                      <p
-                        key={idx}
-                        data-line-index={idx}
-                        className="mb-4 sm:mb-6"
-                        style={{ textIndent: "1em" }}
-                      >
-                        {line}
-                      </p>
-                    ))}
+                    {lines.map((line, idx) => renderAudioLine(line, idx))}
                     <div className="h-8 w-full flex items-center justify-center opacity-30">
                       <p className="text-sm font-sans">- 끝 -</p>
                     </div>
@@ -1046,16 +1264,7 @@ export default function Reader() {
                       <h2 className="text-xl sm:text-2xl font-bold mb-2 sm:mb-4">{displayTitle}</h2>
                       <div className="w-10 h-1 bg-amber-500 mx-auto opacity-50"></div>
                     </div>
-                    {lines.map((line, idx) => (
-                      <p
-                        key={idx}
-                        data-line-index={idx}
-                        className="mb-4 sm:mb-6"
-                        style={{ textIndent: "1em" }}
-                      >
-                        {line}
-                      </p>
-                    ))}
+                    {lines.map((line, idx) => renderAudioLine(line, idx))}
                     <div className="h-8 w-full flex items-center justify-center opacity-30">
                       <p className="text-sm font-sans">- 끝 -</p>
                     </div>
@@ -1069,7 +1278,7 @@ export default function Reader() {
 
       {/* Footer */}
       <footer
-        className={`flex items-center px-4 md:px-6 h-14 border-t ${
+        className={`flex flex-col justify-center px-4 md:px-6 min-h-14 py-1 border-t ${
           theme === "dark" ? "border-gray-800" : "border-gray-100"
         } z-20 bg-inherit`}
       >
@@ -1111,6 +1320,33 @@ export default function Reader() {
             </button>
           </div>
         </div>
+        {showAudioPanel && (
+          <div className="flex flex-wrap items-center justify-center gap-2 py-2 border-t border-black/5">
+            <span className="text-xs font-medium mr-1">오디오 낭독</span>
+            <button onClick={() => skipAudioSentence(-1)} className="p-2 hover:text-amber-600" title="이전 문장" aria-label="이전 문장"><SkipBack className="w-4 h-4" /></button>
+            <button
+              onClick={toggleAudioPlayback}
+              disabled={isAudioLoading && !isAudioPlaying}
+              className="flex items-center gap-1 rounded-full bg-amber-600 px-4 py-2 text-white text-sm disabled:opacity-50"
+            >
+              {isAudioLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : isAudioPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+              {isAudioLoading ? "준비 중" : isAudioPlaying ? "일시정지" : "듣기"}
+            </button>
+            <button onClick={() => skipAudioSentence(1)} className="p-2 hover:text-amber-600" title="다음 문장" aria-label="다음 문장"><SkipForward className="w-4 h-4" /></button>
+            <label className="flex items-center gap-1 text-xs ml-2">
+              속도
+              <select
+                value={audioSpeed}
+                onChange={(event) => setAudioSpeed(Number(event.target.value))}
+                className="rounded border border-border bg-background px-2 py-1 text-xs"
+                aria-label="낭독 속도"
+              >
+                {[0.8, 1, 1.2, 1.5].map((speed) => <option key={speed} value={speed}>{speed.toFixed(1)}배</option>)}
+              </select>
+            </label>
+            {audioUsesBrowserVoice && <span className="text-[11px] text-muted-foreground">브라우저 기본 음성 사용 중</span>}
+          </div>
+        )}
       </footer>
     </div>
   );

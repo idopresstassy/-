@@ -2,6 +2,7 @@ import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import * as db from "./supabaseDb";
+import { getBookAudioMonthlyUsage, getOrCreateBookSentenceAudio } from "./bookAudio";
 
 export const appRouter = router({
   auth: router({
@@ -92,6 +93,25 @@ export const appRouter = router({
       .mutation(async ({ input }) => {
         await db.deleteBook(input.id);
         return { success: true };
+      }),
+  }),
+
+
+  readerAudio: router({
+    getOrCreate: publicProcedure
+      .input(z.object({
+        bookId: z.number().int().positive(),
+        pageNumber: z.number().int().positive(),
+        sentenceNumber: z.number().int().nonnegative(),
+        text: z.string().trim().min(1).max(4000),
+      }))
+      .mutation(async ({ input }) => {
+        try {
+          return await getOrCreateBookSentenceAudio(input);
+        } catch (error) {
+          console.error("Reader audio request failed:", error instanceof Error ? error.message : "unknown error");
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "음성 파일을 준비하지 못했습니다." });
+        }
       }),
   }),
 
@@ -214,6 +234,7 @@ export const appRouter = router({
 
   // ==================== ADMIN ====================
   admin: router({
+    bookAudioUsage: adminProcedure.query(async () => getBookAudioMonthlyUsage()),
     stats: adminProcedure.query(async () => {
       const [totalUsers, todayVisitors, weeklyVisitors, monthlyVisitors, yearlyVisitors, dailyVisitors, popularBooks] = await Promise.all([
         db.getTotalUserCount(),

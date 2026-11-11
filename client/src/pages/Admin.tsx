@@ -8,7 +8,7 @@ import { CREATIVE_GENRES, CREATIVE_GENRE_LABELS, type CreativeGenre } from "@sha
 import { toast } from "sonner";
 import { useState, useRef, useMemo } from "react";
 import { useLocation } from "wouter";
-import { ChevronLeft, Plus, Trash2, Edit, Save, X, Upload, Loader2, Users, BarChart3, BookOpen, Mail, Send, Calendar, TrendingUp, PenLine, Check, Ban } from "lucide-react";
+import { ChevronLeft, Plus, Trash2, Edit, Save, X, Upload, Loader2, Users, BarChart3, BookOpen, Mail, Send, Calendar, TrendingUp, PenLine, Check, Ban, Mic } from "lucide-react";
 import { Line, LineChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 
@@ -117,6 +117,7 @@ export default function Admin() {
 // ==================== DASHBOARD TAB ====================
 function DashboardTab() {
   const { data: stats, isLoading } = trpc.admin.stats.useQuery();
+  const { data: audioUsage } = trpc.admin.bookAudioUsage.useQuery();
 
   if (isLoading) {
     return <div className="animate-pulse text-muted-foreground text-center py-12">통계 로딩 중...</div>;
@@ -125,7 +126,7 @@ function DashboardTab() {
   return (
     <div className="space-y-6">
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         <div className="border border-border rounded-lg p-6 bg-card">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
@@ -158,6 +159,17 @@ function DashboardTab() {
             <div>
               <p className="text-sm text-muted-foreground">인기 도서 1위</p>
               <p className="text-lg font-bold truncate">{stats?.popularBooks?.[0]?.title ?? "-"}</p>
+            </div>
+          </div>
+        </div>
+        <div className="border border-border rounded-lg p-6 bg-card">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+              <Mic className="w-5 h-5 text-amber-700" />
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">이번 달 AI 낭독 사용량</p>
+              <p className="text-xl font-bold">{(audioUsage?.charactersUsed ?? 0).toLocaleString()} / {(audioUsage?.characterLimit ?? 900000).toLocaleString()}자</p>
             </div>
           </div>
         </div>
