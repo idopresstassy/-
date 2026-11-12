@@ -5,7 +5,7 @@ export type ReaderAudioSentence = {
   sentenceNumber: number;
 };
 
-const MAX_TTS_BYTES = 4500;
+const MAX_TTS_BYTES = 3800;
 
 function byteLength(value: string) {
   return new TextEncoder().encode(value).length;
