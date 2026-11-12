@@ -590,11 +590,10 @@ export default function Reader() {
     const stillCurrent = () => !cancelled && token === audioPlayTokenRef.current;
     // Device playback time tends to lag slightly behind the rendered text
     // boundary, so advance by about 30 Korean characters (capped at 12%).
-    const pageTurnLead = Math.min(0.12, 30 / Math.max(1, item.text.length));
     const followSpokenPage = (progress: number) => {
       if (!stillCurrent()) return;
       while (nextPageTransition < item.pageTransitions.length &&
-        progress >= Math.max(0, item.pageTransitions[nextPageTransition].progress - pageTurnLead)) {
+        progress >= item.pageTransitions[nextPageTransition].progress) {
         const pageIndex = item.pageTransitions[nextPageTransition].pageIndex;
         setCurrentPage((page) => Math.max(page, pageIndex));
         nextPageTransition += 1;
