@@ -111,12 +111,26 @@ function measureParagraphPageTransitions(
   }
   range.detach?.();
 
-  const pages = [...pageWeights.entries()].sort((a, b) => a[0] - b[0]);
+  let pages = [...pageWeights.entries()].sort((a, b) => a[0] - b[0]);
+
+  // Some browsers report each word range in only one fragment even when the
+  // inline paragraph itself crosses CSS columns. Fall back to the span's visual
+  // fragments so the reader can still follow the page boundary.
+  if (pages.length < 2) {
+    const fragmentWeights = new Map<number, number>();
+    for (const rect of Array.from(span.getClientRects())) {
+      if (rect.width <= 0 || rect.height <= 0) continue;
+      const page = Math.floor(Math.max(0, rect.left - rootLeft) / stride);
+      fragmentWeights.set(page, (fragmentWeights.get(page) ?? 0) + rect.width);
+    }
+    pages = [...fragmentWeights.entries()].sort((a, b) => a[0] - b[0]);
+  }
+
   const total = pages.reduce((sum, [, weight]) => sum + weight, 0);
   if (pages.length < 2 || total <= 0) return [];
 
   let elapsedWeight = 0;
-  return pages.slice(0, -1).map(([pageIndex, weight], index) => {
+  return pages.slice(0, -1).map(([, weight], index) => {
     elapsedWeight += weight;
     return { pageIndex: pages[index + 1][0], progress: elapsedWeight / total };
   });
