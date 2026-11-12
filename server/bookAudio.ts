@@ -184,16 +184,16 @@ export async function listBookAudioCache(limit = 100) {
     .select("cache_key,book_id,page_number,sentence_number,voice_name,status,created_at")
     .order("created_at", { ascending: false })
     .limit(Math.min(Math.max(limit, 1), 200));
-  if (error) throw new Error(\`오디오 캐시 목록을 불러오지 못했습니다: \${error.message}\`);
+  if (error) throw new Error(`오디오 캐시 목록을 불러오지 못했습니다: ${error.message}`);
 
   const bookIds = [...new Set((data ?? []).map((row) => Number(row.book_id)))];
   const books = await Promise.all(bookIds.map(async (id) => [id, await getBookById(id)] as const));
-  const titles = new Map(books.map(([id, book]) => [id, book?.title ?? \`도서 #\${id}\`]));
+  const titles = new Map(books.map(([id, book]) => [id, book?.title ?? `도서 #${id}`]));
 
   return (data ?? []).map((row) => ({
     cacheKey: row.cache_key,
     bookId: Number(row.book_id),
-    bookTitle: titles.get(Number(row.book_id)) ?? \`도서 #\${row.book_id}\`,
+    bookTitle: titles.get(Number(row.book_id)) ?? `도서 #${row.book_id}`,
     pageNumber: row.page_number,
     sentenceNumber: row.sentence_number,
     voiceName: row.voice_name,
@@ -209,7 +209,7 @@ export async function deleteBookAudioCache(cacheKey: string) {
     .select("cache_key,status,storage_path")
     .eq("cache_key", cacheKey)
     .maybeSingle();
-  if (error) throw new Error(\`오디오 캐시를 확인하지 못했습니다: \${error.message}\`);
+  if (error) throw new Error(`오디오 캐시를 확인하지 못했습니다: ${error.message}`);
   if (!data) return { deleted: false, storageRemoved: true };
   if (data.status === "generating") throw new Error("생성 중인 음성은 잠시 후 삭제해 주세요.");
 
@@ -218,7 +218,7 @@ export async function deleteBookAudioCache(cacheKey: string) {
     .from("book_audio_cache")
     .delete()
     .eq("cache_key", cacheKey);
-  if (deleteError) throw new Error(\`오디오 캐시 기록을 삭제하지 못했습니다: \${deleteError.message}\`);
+  if (deleteError) throw new Error(`오디오 캐시 기록을 삭제하지 못했습니다: ${deleteError.message}`);
 
   const { error: storageError } = await supabase.storage.from(AUDIO_BUCKET).remove([data.storage_path]);
   if (storageError) {
