@@ -175,6 +175,29 @@ function measureParagraphPageTransitions(
   });
 }
 
+function getSpokenTextByPage(
+  span: HTMLElement,
+  rootLeft: number,
+  stride: number,
+): Map<number, string> {
+  const textNode = span.firstChild;
+  const text = textNode?.textContent ?? "";
+  const pageText = new Map<number, string>();
+  if (!textNode || textNode.nodeType !== Node.TEXT_NODE || !text) return pageText;
+
+  const range = document.createRange();
+  for (const character of getSpokenCharacterRanges(text)) {
+    range.setStart(textNode, character.offset);
+    range.setEnd(textNode, character.offset + character.length);
+    const rect = range.getBoundingClientRect();
+    if (rect.width <= 0 && rect.height <= 0) continue;
+    const page = Math.floor(Math.max(0, rect.left - rootLeft) / stride);
+    pageText.set(page, (pageText.get(page) ?? "") + text.slice(character.offset, character.offset + character.length));
+  }
+  range.detach?.();
+  return new Map([...pageText.entries()].map(([page, value]) => [page, value.trim()]).filter(([, value]) => value.length > 0));
+}
+
 export function collectPageAudioSentences(
   root: HTMLElement | null,
   pageIndex: number,
@@ -186,6 +209,22 @@ export function collectPageAudioSentences(
   const rows: ReaderAudioSentence[] = [];
   for (const span of spans) {
     if (!span.closest<HTMLElement>("[data-line-index]")) continue;
+    const pageParts = getSpokenTextByPage(span, rootLeft, stride);
+    const pageText = pageParts.get(pageIndex);
+    if (pageText) {
+      rows.push({
+        id: Number(span.dataset.audioSentenceId),
+        text: pageText,
+        pageNumber: pageIndex + 1,
+        sentenceNumber: rows.length,
+        pageTransitions: [],
+      });
+      continue;
+    }
+
+    // If this browser cannot measure individual text ranges, retain the
+    // existing whole-paragraph timing fallback for the paragraph's first page.
+    if (pageParts.size > 0) continue;
     const page = Math.floor(Math.max(0, span.getBoundingClientRect().left - rootLeft) / stride);
     if (page !== pageIndex) continue;
     const text = span.dataset.audioText ?? cleanReaderAudioText(span.textContent ?? "");
