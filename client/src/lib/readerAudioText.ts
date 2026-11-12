@@ -12,7 +12,7 @@ function byteLength(value: string) {
 }
 
 function splitOverlongText(text: string): string[] {
-  const words = text.match(/\\S+\\s*/g) ?? [text];
+  const words = text.match(/\S+\s*/g) ?? [text];
   const chunks: string[] = [];
   let current = "";
   for (const word of words) {
@@ -45,7 +45,7 @@ export function splitReaderParagraph(text: string): string[] {
   const Segmenter = (Intl as typeof Intl & { Segmenter?: new (locale: string, options: { granularity: "sentence" }) => { segment: (value: string) => Iterable<{ segment: string }> } }).Segmenter;
   const sentences = Segmenter
     ? Array.from(new Segmenter("ko", { granularity: "sentence" }).segment(text), (item) => item.segment)
-    : (text.match(/[^.!?。！？…]+[.!?。！？…]*[”’」』"']*\\s*|[.!?。！？…]+/g) ?? [text]);
+    : (text.match(/[^.!?。！？…]+[.!?。！？…]*[”’」』"']*\s*|[.!?。！？…]+/g) ?? [text]);
 
   const chunks: string[] = [];
   let current = "";
@@ -67,8 +67,8 @@ export function splitReaderParagraph(text: string): string[] {
 
 export function cleanReaderAudioText(text: string): string {
   return text
-    .replace(/[\\u00B9\\u00B2\\u00B3\\u2070-\\u2079†‡※]/g, "")
-    .replace(/\\s+/g, " ")
+    .replace(/[\u00B9\u00B2\u00B3\u2070-\u2079†‡※]/g, "")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
