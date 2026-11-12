@@ -67,6 +67,7 @@ export function splitReaderParagraph(text: string): string[] {
 
 export function cleanReaderAudioText(text: string): string {
   return text
+    .replace(/\([^)]*[\u3400-\u4DBF\u4E00-\u9FFF][^)]*\)|（[^）]*[\u3400-\u4DBF\u4E00-\u9FFF][^）]*）/g, "")
     .replace(/[\u00B9\u00B2\u00B3\u2070-\u2079†‡※]/g, "")
     .replace(/\s+/g, " ")
     .trim();
