@@ -101,7 +101,7 @@ export async function getOrCreateBookSentenceAudio(input: AudioRequest) {
       if (response.ok) canonicalText = await response.text();
     }
   }
-  const normalize = (value: string) => value.normalize("NFC").replace(/[\u00B9\u00B2\u00B3\u2070-\u2079†‡※]/g, "").replace(/\s+/g, " ").trim();
+  const normalize = (value: string) => value.normalize("NFC").replace(/\([^)]*[\u3400-\u4DBF\u4E00-\u9FFF][^)]*\)|（[^）]*[\u3400-\u4DBF\u4E00-\u9FFF][^）]*）/g, "").replace(/[\u00B9\u00B2\u00B3\u2070-\u2079†‡※]/g, "").replace(/\s+/g, " ").trim();
   if (!canonicalText || !normalize(canonicalText).includes(normalize(text))) {
     throw new Error("뷰어에 표시된 도서 문장과 원문이 일치하지 않습니다.");
   }
