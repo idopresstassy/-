@@ -177,7 +177,7 @@ export default function Reader() {
   const [audioActiveSentenceId, setAudioActiveSentenceId] = useState<number | null>(null);
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
   const [isAudioLoading, setIsAudioLoading] = useState(false);
-  const [audioSpeed, setAudioSpeed] = useState(1);
+  const [audioSpeed, setAudioSpeed] = useState(0.8);
   const [audioUsesBrowserVoice, setAudioUsesBrowserVoice] = useState(false);
   const audioElementRef = useRef<HTMLAudioElement>(null);
   const audioPlayTokenRef = useRef(0);
