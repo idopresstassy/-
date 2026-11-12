@@ -98,16 +98,19 @@ function measureParagraphPageTransitions(
 
   const pageWeights = new Map<number, number>();
   const range = document.createRange();
-  for (const part of segments) {
-    range.setStart(textNode, part.index);
-    range.setEnd(textNode, part.index + part.segment.length);
-    const rects = Array.from(range.getClientRects());
-    if (rects.length === 0) continue;
-    const weight = Array.from(part.segment).length / rects.length;
-    for (const rect of rects) {
+  let textOffset = 0;
+  // Count rendered code points one by one. This makes the page boundary
+  // correspond to the actual number of characters on each page, rather than
+  // approximating it from word-sized ranges.
+  for (const character of Array.from(text)) {
+    range.setStart(textNode, textOffset);
+    range.setEnd(textNode, textOffset + character.length);
+    const rect = range.getBoundingClientRect();
+    if (rect.width > 0 || rect.height > 0) {
       const page = Math.floor(Math.max(0, rect.left - rootLeft) / stride);
-      pageWeights.set(page, (pageWeights.get(page) ?? 0) + weight);
+      pageWeights.set(page, (pageWeights.get(page) ?? 0) + 1);
     }
+    textOffset += character.length;
   }
   range.detach?.();
 
