@@ -79,9 +79,6 @@ function measureParagraphPageTransitions(
   rootLeft: number,
   stride: number,
 ): Array<{ pageIndex: number; progress: number }> {
-  const box = span.getBoundingClientRect();
-  if (box.width <= stride) return [];
-
   const textNode = span.firstChild;
   if (!textNode || textNode.nodeType !== Node.TEXT_NODE) return [];
   const text = textNode.textContent ?? "";
