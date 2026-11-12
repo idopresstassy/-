@@ -5,19 +5,70 @@ export type ReaderAudioSentence = {
   sentenceNumber: number;
 };
 
-/** Split display paragraphs while retaining every character in the rendered spans. */
-export function splitReaderParagraph(text: string): string[] {
-  const Segmenter = (Intl as typeof Intl & { Segmenter?: new (locale: string, options: { granularity: "sentence" }) => { segment: (value: string) => Iterable<{ segment: string }> } }).Segmenter;
-  if (Segmenter) {
-    return Array.from(new Segmenter("ko", { granularity: "sentence" }).segment(text), (item) => item.segment);
+const MAX_TTS_BYTES = 4500;
+
+function byteLength(value: string) {
+  return new TextEncoder().encode(value).length;
+}
+
+function splitOverlongText(text: string): string[] {
+  const words = text.match(/\\S+\\s*/g) ?? [text];
+  const chunks: string[] = [];
+  let current = "";
+  for (const word of words) {
+    if (byteLength(cleanReaderAudioText(current + word)) <= MAX_TTS_BYTES) {
+      current += word;
+      continue;
+    }
+    if (current) chunks.push(current);
+    if (byteLength(cleanReaderAudioText(word)) <= MAX_TTS_BYTES) {
+      current = word;
+      continue;
+    }
+    current = "";
+    for (const character of Array.from(word)) {
+      if (byteLength(cleanReaderAudioText(current + character)) > MAX_TTS_BYTES && current) {
+        chunks.push(current);
+        current = "";
+      }
+      current += character;
+    }
   }
-  return text.match(/[^.!?。！？…]+[.!?。！？…]*[”’」』\"']*\s*|[.!?。！？…]+/g) ?? [text];
+  if (current) chunks.push(current);
+  return chunks;
+}
+
+/** Keep each source line as one narration unit unless it exceeds Cloud TTS's safe request size. */
+export function splitReaderParagraph(text: string): string[] {
+  if (byteLength(cleanReaderAudioText(text)) <= MAX_TTS_BYTES) return [text];
+
+  const Segmenter = (Intl as typeof Intl & { Segmenter?: new (locale: string, options: { granularity: "sentence" }) => { segment: (value: string) => Iterable<{ segment: string }> } }).Segmenter;
+  const sentences = Segmenter
+    ? Array.from(new Segmenter("ko", { granularity: "sentence" }).segment(text), (item) => item.segment)
+    : (text.match(/[^.!?。！？…]+[.!?。！？…]*[”’」』"']*\\s*|[.!?。！？…]+/g) ?? [text]);
+
+  const chunks: string[] = [];
+  let current = "";
+  for (const sentence of sentences) {
+    if (byteLength(cleanReaderAudioText(current + sentence)) <= MAX_TTS_BYTES) {
+      current += sentence;
+      continue;
+    }
+    if (current) chunks.push(current);
+    if (byteLength(cleanReaderAudioText(sentence)) <= MAX_TTS_BYTES) current = sentence;
+    else {
+      chunks.push(...splitOverlongText(sentence));
+      current = "";
+    }
+  }
+  if (current) chunks.push(current);
+  return chunks;
 }
 
 export function cleanReaderAudioText(text: string): string {
   return text
-    .replace(/[\u00B9\u00B2\u00B3\u2070-\u2079†‡※]/g, "")
-    .replace(/\s+/g, " ")
+    .replace(/[\\u00B9\\u00B2\\u00B3\\u2070-\\u2079†‡※]/g, "")
+    .replace(/\\s+/g, " ")
     .trim();
 }
 
