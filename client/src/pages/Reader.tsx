@@ -532,7 +532,7 @@ export default function Reader() {
     </p>
   ), [displaySentences, startAudioFromSentence, audioActiveSentenceId]);
 
-  // Prepare the page queue from the same sentence spans rendered by the reader.
+  // Prepare the page queue from the same paragraph spans rendered by the reader.
   useEffect(() => {
     if (!audioRequest || audioRequest.page !== currentPage || stride <= 0 || !isReady) return;
     let cancelled = false;
@@ -573,7 +573,7 @@ export default function Reader() {
     setIsAudioLoading(false);
   }, [audioIndex, audioQueue, audioPage, totalPages]);
 
-  // Synthesize or reuse one sentence at a time. Quota/service failures use the browser voice.
+  // Synthesize or reuse one paragraph at a time. Quota/service failures use the browser voice.
   useEffect(() => {
     if (!isAudioPlaying || !audioQueue[audioIndex]) return;
     const item = audioQueue[audioIndex];
@@ -1323,7 +1323,7 @@ export default function Reader() {
         {showAudioPanel && (
           <div className="flex flex-wrap items-center justify-center gap-2 py-2 border-t border-black/5">
             <span className="text-xs font-medium mr-1">오디오 낭독</span>
-            <button onClick={() => skipAudioSentence(-1)} className="p-2 hover:text-amber-600" title="이전 문장" aria-label="이전 문장"><SkipBack className="w-4 h-4" /></button>
+            <button onClick={() => skipAudioSentence(-1)} className="p-2 hover:text-amber-600" title="이전 문단" aria-label="이전 문단"><SkipBack className="w-4 h-4" /></button>
             <button
               onClick={toggleAudioPlayback}
               disabled={isAudioLoading && !isAudioPlaying}
@@ -1332,7 +1332,7 @@ export default function Reader() {
               {isAudioLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : isAudioPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
               {isAudioLoading ? "준비 중" : isAudioPlaying ? "일시정지" : "듣기"}
             </button>
-            <button onClick={() => skipAudioSentence(1)} className="p-2 hover:text-amber-600" title="다음 문장" aria-label="다음 문장"><SkipForward className="w-4 h-4" /></button>
+            <button onClick={() => skipAudioSentence(1)} className="p-2 hover:text-amber-600" title="다음 문단" aria-label="다음 문단"><SkipForward className="w-4 h-4" /></button>
             <label className="flex items-center gap-1 text-xs ml-2">
               속도
               <select
