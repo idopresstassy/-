@@ -452,7 +452,6 @@ export default function Reader() {
 
   const requestAudioPage = useCallback((page: number, sentenceId: number | null = null) => {
     const safePage = Math.max(0, Math.min(page, totalPages - 1));
-    setShowAudioPanel(true);
     setReadMode("page");
     setCurrentPage(safePage);
     setAudioQueue([]);
