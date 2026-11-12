@@ -66,7 +66,7 @@ export default function Reader() {
     );
 
   // Reading progress
-  const { data: savedProgress } = trpc.progress.get.useQuery(
+  const { data: savedProgress, isLoading: savedProgressLoading } = trpc.progress.get.useQuery(
     { bookId },
     { enabled: bookId > 0 && !!user }
   );
@@ -494,28 +494,24 @@ export default function Reader() {
     return () => clearTimeout(timer);
   }, [currentPage, totalPages, stride, user, bookId, hasRestoredProgress]);
 
-  // Restore reading position
+  // Wait for the saved-progress request before deciding whether to restore a page.
+  // Otherwise its initial undefined data can be mistaken for "no saved progress".
   useEffect(() => {
     if (
       hasRestoredProgress ||
-      !savedProgress ||
-      savedProgress.currentPage === 0 ||
+      authLoading ||
+      (user && savedProgressLoading) ||
       !contentRef.current ||
       totalPages <= 1 ||
       stride === 0
     )
       return;
 
-    setCurrentPage(Math.min(savedProgress.currentPage, totalPages - 1));
-    setHasRestoredProgress(true);
-  }, [savedProgress, totalPages, stride, hasRestoredProgress]);
-
-  // Mark progress as restored if no saved progress
-  useEffect(() => {
-    if (!hasRestoredProgress && !savedProgress && totalPages > 1 && stride > 0) {
-      setHasRestoredProgress(true);
+    if (user && savedProgress && savedProgress.currentPage > 0) {
+      setCurrentPage(Math.min(savedProgress.currentPage, totalPages - 1));
     }
-  }, [savedProgress, totalPages, stride, hasRestoredProgress]);
+    setHasRestoredProgress(true);
+  }, [savedProgress, savedProgressLoading, user, authLoading, totalPages, stride, hasRestoredProgress]);
 
   // Navigation
   const nextPage = useCallback(() => {
