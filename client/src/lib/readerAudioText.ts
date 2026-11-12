@@ -126,6 +126,23 @@ function measureParagraphPageTransitions(
     pages = [...fragmentWeights.entries()].sort((a, b) => a[0] - b[0]);
   }
 
+  if (pages.length < 2) {
+    const box = span.getBoundingClientRect();
+    const left = Math.max(0, box.left - rootLeft);
+    const right = Math.max(left, box.right - rootLeft);
+    const firstPage = Math.floor(left / stride);
+    const lastPage = Math.floor(Math.max(left, right - 1) / stride);
+    if (lastPage > firstPage) {
+      const transitionCount = lastPage - firstPage;
+      return Array.from({ length: transitionCount }, (_, index) => ({
+        pageIndex: firstPage + index + 1,
+        // As a final fallback, turn at evenly spaced points through the
+        // paragraph instead of waiting for the whole audio file to end.
+        progress: (index + 1) / (transitionCount + 1),
+      }));
+    }
+  }
+
   const total = pages.reduce((sum, [, weight]) => sum + weight, 0);
   if (pages.length < 2 || total <= 0) return [];
 
