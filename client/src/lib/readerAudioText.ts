@@ -74,6 +74,42 @@ export function cleanReaderAudioText(text: string): string {
     .trim();
 }
 
+function getSpokenCharacterRanges(text: string): Array<{ offset: number; length: number }> {
+  const omittedRanges = Array.from(
+    text.matchAll(/\\([^)]*[\\u3400-\\u4DBF\\u4E00-\\u9FFF][^)]*\\)|（[^）]*[\\u3400-\\u4DBF\\u4E00-\\u9FFF][^）]*）/g),
+    (match) => {
+      const start = match.index ?? 0;
+      return { start, end: start + match[0].length };
+    },
+  );
+  const characters: Array<{ offset: number; length: number }> = [];
+  let offset = 0;
+  let rangeIndex = 0;
+  let pendingSpace: { offset: number; length: number } | null = null;
+  const hasSpokenCharacter = () => characters.length > 0;
+
+  for (const character of Array.from(text)) {
+    const end = offset + character.length;
+    while (rangeIndex < omittedRanges.length && omittedRanges[rangeIndex].end <= offset) rangeIndex += 1;
+    const omittedAsHanja = rangeIndex < omittedRanges.length &&
+      omittedRanges[rangeIndex].start < end && omittedRanges[rangeIndex].end > offset;
+    const omittedAsFootnote = /[\\u00B9\\u00B2\\u00B3\\u2070-\\u2079†‡※]/u.test(character);
+
+    if (!omittedAsHanja && !omittedAsFootnote) {
+      if (/\\s/u.test(character)) {
+        if (hasSpokenCharacter() && pendingSpace === null) pendingSpace = { offset, length: character.length };
+      } else {
+        if (pendingSpace) characters.push(pendingSpace);
+        pendingSpace = null;
+        characters.push({ offset, length: character.length });
+      }
+    }
+    offset = end;
+  }
+
+  return characters;
+}
+
 function measureParagraphPageTransitions(
   span: HTMLElement,
   rootLeft: number,
@@ -86,19 +122,16 @@ function measureParagraphPageTransitions(
 
   const pageWeights = new Map<number, number>();
   const range = document.createRange();
-  let textOffset = 0;
-  // Count rendered code points one by one. This makes the page boundary
-  // correspond to the actual number of characters on each page, rather than
-  // approximating it from word-sized ranges.
-  for (const character of Array.from(text)) {
-    range.setStart(textNode, textOffset);
-    range.setEnd(textNode, textOffset + character.length);
+  // Use the same text normalization as the audio request. Parenthesized Hanja,
+  // footnote symbols, and collapsed whitespace must not shift the page timer.
+  for (const character of getSpokenCharacterRanges(text)) {
+    range.setStart(textNode, character.offset);
+    range.setEnd(textNode, character.offset + character.length);
     const rect = range.getBoundingClientRect();
     if (rect.width > 0 || rect.height > 0) {
       const page = Math.floor(Math.max(0, rect.left - rootLeft) / stride);
       pageWeights.set(page, (pageWeights.get(page) ?? 0) + 1);
     }
-    textOffset += character.length;
   }
   range.detach?.();
 
