@@ -584,6 +584,9 @@ export default function Reader() {
     const token = ++audioPlayTokenRef.current;
     let cancelled = false;
     let nextPageTransition = 0;
+    let speechStartedAt = 0;
+    let lastSpeechBoundaryAt = 0;
+    let speechFallbackTimer: number | null = null;
     const stillCurrent = () => !cancelled && token === audioPlayTokenRef.current;
     const followSpokenPage = (progress: number) => {
       if (!stillCurrent()) return;
@@ -601,18 +604,34 @@ export default function Reader() {
       const utterance = new SpeechSynthesisUtterance(item.text);
       utterance.lang = "ko-KR";
       utterance.rate = audioSpeed;
+      speechStartedAt = performance.now();
+      lastSpeechBoundaryAt = speechStartedAt;
+      // Some browser voices do not emit boundary events for Korean. Estimate
+      // progress only after boundary callbacks stop arriving.
+      const estimatedDurationMs = Math.max(1500, (item.text.length / (4 * audioSpeed)) * 1000);
+      speechFallbackTimer = window.setInterval(() => {
+        const now = performance.now();
+        if (now - lastSpeechBoundaryAt > 1200) {
+          followSpokenPage(Math.min(1, (now - speechStartedAt) / estimatedDurationMs));
+        }
+      }, 250);
       utterance.onboundary = (event) => {
+        lastSpeechBoundaryAt = performance.now();
         if (event.charIndex >= 0 && item.text.length > 0) {
           followSpokenPage(event.charIndex / item.text.length);
         }
       };
       utterance.onend = () => {
+        if (speechFallbackTimer !== null) window.clearInterval(speechFallbackTimer);
         if (stillCurrent()) {
           followSpokenPage(1);
           advanceAudio();
         }
       };
-      utterance.onerror = () => { if (stillCurrent()) advanceAudio(); };
+      utterance.onerror = () => {
+        if (speechFallbackTimer !== null) window.clearInterval(speechFallbackTimer);
+        if (stillCurrent()) advanceAudio();
+      };
       window.speechSynthesis.cancel();
       window.speechSynthesis.speak(utterance);
     };
@@ -642,6 +661,7 @@ export default function Reader() {
     }).catch(speakInBrowser);
     return () => {
       cancelled = true;
+      if (speechFallbackTimer !== null) window.clearInterval(speechFallbackTimer);
       if (audio) { audio.pause(); audio.onended = null; audio.onerror = null; audio.ontimeupdate = null; }
       window.speechSynthesis?.cancel();
     };
