@@ -588,8 +588,8 @@ export default function Reader() {
     let lastSpeechBoundaryAt = 0;
     let speechFallbackTimer: number | null = null;
     const stillCurrent = () => !cancelled && token === audioPlayTokenRef.current;
-    // Device playback time tends to lag slightly behind the rendered text
-    // boundary, so advance by about 30 Korean characters (capped at 12%).
+    // Keep page movement tied to measured text boundaries when a legacy
+    // whole-paragraph audio item crosses pages.
     const followSpokenPage = (progress: number) => {
       if (!stillCurrent()) return;
       while (nextPageTransition < item.pageTransitions.length &&
