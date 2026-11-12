@@ -84,18 +84,6 @@ function measureParagraphPageTransitions(
   const text = textNode.textContent ?? "";
   if (!text) return [];
 
-  const Segmenter = (Intl as typeof Intl & {
-    Segmenter?: new (locale: string, options: { granularity: "word" }) => {
-      segment: (value: string) => Iterable<{ segment: string; index: number }>;
-    };
-  }).Segmenter;
-  const segments = Segmenter
-    ? Array.from(new Segmenter("ko", { granularity: "word" }).segment(text))
-    : Array.from(text.matchAll(/\S+\s*|\s+/g), (match) => ({
-        segment: match[0],
-        index: match.index ?? 0,
-      }));
-
   const pageWeights = new Map<number, number>();
   const range = document.createRange();
   let textOffset = 0;
