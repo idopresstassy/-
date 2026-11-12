@@ -76,7 +76,7 @@ export function cleanReaderAudioText(text: string): string {
 
 function getSpokenCharacterRanges(text: string): Array<{ offset: number; length: number }> {
   const omittedRanges = Array.from(
-    text.matchAll(/\\([^)]*[\\u3400-\\u4DBF\\u4E00-\\u9FFF][^)]*\\)|（[^）]*[\\u3400-\\u4DBF\\u4E00-\\u9FFF][^）]*）/g),
+    text.matchAll(/\([^)]*[\u3400-\u4DBF\u4E00-\u9FFF][^)]*\)|（[^）]*[\u3400-\u4DBF\u4E00-\u9FFF][^）]*）/g),
     (match) => {
       const start = match.index ?? 0;
       return { start, end: start + match[0].length };
@@ -86,18 +86,17 @@ function getSpokenCharacterRanges(text: string): Array<{ offset: number; length:
   let offset = 0;
   let rangeIndex = 0;
   let pendingSpace: { offset: number; length: number } | null = null;
-  const hasSpokenCharacter = () => characters.length > 0;
 
   for (const character of Array.from(text)) {
     const end = offset + character.length;
     while (rangeIndex < omittedRanges.length && omittedRanges[rangeIndex].end <= offset) rangeIndex += 1;
     const omittedAsHanja = rangeIndex < omittedRanges.length &&
       omittedRanges[rangeIndex].start < end && omittedRanges[rangeIndex].end > offset;
-    const omittedAsFootnote = /[\\u00B9\\u00B2\\u00B3\\u2070-\\u2079†‡※]/u.test(character);
+    const omittedAsFootnote = /[\u00B9\u00B2\u00B3\u2070-\u2079†‡※]/u.test(character);
 
     if (!omittedAsHanja && !omittedAsFootnote) {
-      if (/\\s/u.test(character)) {
-        if (hasSpokenCharacter() && pendingSpace === null) pendingSpace = { offset, length: character.length };
+      if (/\s/u.test(character)) {
+        if (characters.length > 0 && pendingSpace === null) pendingSpace = { offset, length: character.length };
       } else {
         if (pendingSpace) characters.push(pendingSpace);
         pendingSpace = null;
@@ -109,7 +108,6 @@ function getSpokenCharacterRanges(text: string): Array<{ offset: number; length:
 
   return characters;
 }
-
 function measureParagraphPageTransitions(
   span: HTMLElement,
   rootLeft: number,
