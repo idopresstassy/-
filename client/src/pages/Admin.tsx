@@ -19,7 +19,7 @@ const GENRE_OPTIONS = [
   { value: "creative" as const, label: "창작" },
 ];
 
-type AdminTab = "dashboard" | "books" | "creative" | "members" | "email" | "donation";
+type AdminTab = "dashboard" | "books" | "creative" | "audio" | "members" | "email" | "donation";
 
 const visitorChartConfig = {
   visitors: {
@@ -65,6 +65,7 @@ export default function Admin() {
     { id: "dashboard" as const, label: "대시보드", icon: BarChart3 },
     { id: "books" as const, label: "도서 관리", icon: BookOpen },
     { id: "creative" as const, label: "창작 원고 검수", icon: PenLine },
+    { id: "audio" as const, label: "낭독 음성 관리", icon: Mic },
     { id: "members" as const, label: "회원 관리", icon: Users },
     { id: "email" as const, label: "메일 발송", icon: Mail },
     { id: "donation" as const, label: "후원 설정", icon: Edit },
@@ -106,6 +107,7 @@ export default function Admin() {
         {activeTab === "dashboard" && <DashboardTab />}
         {activeTab === "books" && <BooksTab utils={utils} />}
         {activeTab === "creative" && <CreativeReviewTab utils={utils} />}
+        {activeTab === "audio" && <AudioCacheTab utils={utils} />}
         {activeTab === "members" && <MembersTab />}
         {activeTab === "email" && <EmailTab />}
         {activeTab === "donation" && <DonationTab utils={utils} />}
@@ -273,6 +275,96 @@ function DashboardTab() {
         )}
       </section>
     </div>
+  );
+}
+
+// ==================== AUDIO CACHE TAB ====================
+function AudioCacheTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> }) {
+  const { data: entries, isLoading, refetch, isFetching } = trpc.admin.bookAudioCache.list.useQuery({ limit: 100 });
+  const deleteAudio = trpc.admin.bookAudioCache.delete.useMutation({
+    onSuccess: (result) => {
+      void utils.admin.bookAudioCache.list.invalidate();
+      void utils.admin.bookAudioUsage.invalidate();
+      if (result.storageRemoved) toast.success("낭독 음성을 삭제했습니다. 다음 재생 때 다시 생성됩니다.");
+      else toast.warning("캐시 기록은 삭제했지만 저장 파일 정리가 완료되지 않았습니다.");
+    },
+    onError: (error) => toast.error(error.message || "낭독 음성을 삭제하지 못했습니다."),
+  });
+
+  const handleDelete = (entry: NonNullable<typeof entries>[number]) => {
+    const confirmed = window.confirm(
+      `“${entry.bookTitle}” ${entry.pageNumber}쪽의 낭독 음성을 삭제할까요? 다음 재생 때 Google 음성을 다시 생성하며 이번 달 사용량에 다시 포함됩니다.`
+    );
+    if (confirmed) deleteAudio.mutate({ cacheKey: entry.cacheKey });
+  };
+
+  return (
+    <section className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-bold">낭독 음성 관리</h2>
+          <p className="text-sm text-muted-foreground mt-1">잘못 만들어진 음성만 삭제하세요. 삭제한 음성은 다음에 들을 때 다시 생성됩니다.</p>
+        </div>
+        <Button variant="outline" onClick={() => void refetch()} disabled={isFetching}>
+          {isFetching && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}새로고침
+        </Button>
+      </div>
+
+      <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+        삭제 후 다시 생성하면 Google 음성 사용량이 다시 추가됩니다. 이미 사용한 월간 사용량은 삭제해도 줄어들지 않습니다.
+      </div>
+
+      {isLoading ? (
+        <div className="py-12 text-center text-muted-foreground">낭독 음성 목록을 불러오는 중...</div>
+      ) : entries?.length ? (
+        <div className="overflow-x-auto rounded-lg border border-border bg-card">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border text-left">
+                <th className="p-3">도서</th>
+                <th className="p-3">위치</th>
+                <th className="p-3">목소리</th>
+                <th className="p-3">상태</th>
+                <th className="p-3">생성 시각</th>
+                <th className="p-3 text-right">관리</th>
+              </tr>
+            </thead>
+            <tbody>
+              {entries.map((entry) => (
+                <tr key={entry.cacheKey} className="border-b border-border/60 last:border-0">
+                  <td className="p-3 min-w-40">
+                    <div className="font-medium">{entry.bookTitle}</div>
+                    <div className="text-xs text-muted-foreground">도서 번호 {entry.bookId}</div>
+                  </td>
+                  <td className="p-3 whitespace-nowrap">쪽 {entry.pageNumber} · 문단 {entry.sentenceNumber + 1}</td>
+                  <td className="p-3 whitespace-nowrap">{entry.voiceName.replace("ko-KR-Chirp3-HD-", "")}</td>
+                  <td className="p-3 whitespace-nowrap">
+                    {entry.status === "ready" ? "완료" : entry.status === "generating" ? "생성 중" : "실패"}
+                  </td>
+                  <td className="p-3 whitespace-nowrap text-muted-foreground">{new Date(entry.createdAt).toLocaleString("ko-KR")}</td>
+                  <td className="p-3 text-right">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDelete(entry)}
+                      disabled={entry.status === "generating" || deleteAudio.isPending}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      {deleteAudio.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Trash2 className="w-4 h-4 mr-1" />}
+                      삭제
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="rounded-lg border border-dashed border-border py-12 text-center text-muted-foreground">
+          저장된 낭독 음성이 없습니다.
+        </div>
+      )}
+    </section>
   );
 }
 
