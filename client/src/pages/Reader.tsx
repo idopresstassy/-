@@ -183,6 +183,46 @@ export default function Reader() {
   const prefetchedPageRef = useRef<number | null>(null);
   const audioProgressKey = `reader_audio_progress_${bookId}`;
   const audioMutation = trpc.readerAudio.getOrCreate.useMutation();
+  const audioRequestCacheRef = useRef(new Map<string, ReturnType<typeof audioMutation.mutateAsync>>());
+  const preloadedAudioRef = useRef(new Map<string, HTMLAudioElement>());
+  const audioCacheKey = useCallback((item: ReaderAudioSentence) =>
+    String(bookId) + ":" + item.pageNumber + ":" + item.sentenceNumber + ":" + item.text, [bookId]);
+  const requestReaderAudio = useCallback((item: ReaderAudioSentence) => {
+    const key = audioCacheKey(item);
+    const cache = audioRequestCacheRef.current;
+    let request = cache.get(key);
+    if (!request) {
+      request = audioMutation.mutateAsync({
+        bookId, pageNumber: item.pageNumber, sentenceNumber: item.sentenceNumber, text: item.text,
+      });
+      cache.set(key, request);
+      while (cache.size > 20) {
+        const oldestKey = cache.keys().next().value;
+        if (!oldestKey || oldestKey === key) break;
+        cache.delete(oldestKey);
+        const oldAudio = preloadedAudioRef.current.get(oldestKey);
+        if (oldAudio) {
+          oldAudio.pause();
+          oldAudio.removeAttribute("src");
+          oldAudio.load();
+          preloadedAudioRef.current.delete(oldestKey);
+        }
+      }
+    }
+    return request;
+  }, [audioCacheKey, audioMutation.mutateAsync, bookId]);
+  const prepareReaderAudio = useCallback(async (item: ReaderAudioSentence) => {
+    const key = audioCacheKey(item);
+    const result = await requestReaderAudio(item);
+    if (!result.fallback && !preloadedAudioRef.current.has(key)) {
+      const preload = new Audio();
+      preload.preload = "auto";
+      preload.src = result.audioUrl;
+      preload.load();
+      preloadedAudioRef.current.set(key, preload);
+    }
+    return result;
+  }, [audioCacheKey, requestReaderAudio]);
   const [isTwoPageMode, setIsTwoPageMode] = useState(false);
   const [stride, setStride] = useState(0);
   const [containerWidth, setContainerWidth] = useState<number | null>(null);
@@ -639,9 +679,7 @@ export default function Reader() {
     };
     setAudioActiveSentenceId(item.id);
     setIsAudioLoading(true);
-    audioMutation.mutateAsync({
-      bookId, pageNumber: item.pageNumber, sentenceNumber: item.sentenceNumber, text: item.text,
-    }).then((result) => {
+    requestReaderAudio(item).then((result) => {
       if (!stillCurrent()) return;
       if (result.fallback) { speakInBrowser(); return; }
       if (!audio) { speakInBrowser(); return; }
@@ -667,30 +705,28 @@ export default function Reader() {
       if (audio) { audio.pause(); audio.onended = null; audio.onerror = null; audio.ontimeupdate = null; }
       window.speechSynthesis?.cancel();
     };
-  }, [isAudioPlaying, audioQueue, audioIndex, audioSpeed, bookId, audioMutation.mutateAsync, advanceAudio]);
+  }, [isAudioPlaying, audioQueue, audioIndex, audioSpeed, bookId, requestReaderAudio, advanceAudio]);
 
-  // Keep a single next page warm while this page is being heard; never synthesize the whole book.
+  // Prepare the next two clips while the current clip is playing to reduce silence.
+  useEffect(() => {
+    if (!isAudioPlaying || audioQueue.length === 0) return;
+    const upcoming = audioQueue.slice(audioIndex + 1, audioIndex + 3);
+    void Promise.all(upcoming.map((row) => prepareReaderAudio(row).catch(() => undefined)));
+  }, [isAudioPlaying, audioQueue, audioIndex, prepareReaderAudio]);
+
+  // Keep the first two clips of only the next page ready; do not synthesize the whole book.
   useEffect(() => {
     if (!isAudioPlaying || audioQueue.length === 0 || audioPage + 1 >= totalPages || stride <= 0) return;
     const nextPage = audioPage + 1;
     if (prefetchedPageRef.current === nextPage) return;
-    let cancelled = false;
-    const frame = requestAnimationFrame(async () => {
+    const frame = requestAnimationFrame(() => {
       const rows = collectPageAudioSentences(contentRef.current, nextPage, stride);
       if (rows.length === 0) return;
       prefetchedPageRef.current = nextPage;
-      for (const row of rows) {
-        if (cancelled) break;
-        try {
-          const result = await audioMutation.mutateAsync({
-            bookId, pageNumber: row.pageNumber, sentenceNumber: row.sentenceNumber, text: row.text,
-          });
-          if (result.fallback) break;
-        } catch { break; }
-      }
+      void Promise.all(rows.slice(0, 2).map((row) => prepareReaderAudio(row).catch(() => undefined)));
     });
-    return () => { cancelled = true; cancelAnimationFrame(frame); };
-  }, [isAudioPlaying, audioQueue.length, audioPage, totalPages, stride, bookId, audioMutation.mutateAsync]);
+    return () => cancelAnimationFrame(frame);
+  }, [isAudioPlaying, audioQueue.length, audioPage, totalPages, stride, prepareReaderAudio]);
 
   useEffect(() => {
     if (!isAudioPlaying || !audioQueue[audioIndex]) return;
