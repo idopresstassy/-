@@ -3,6 +3,7 @@ export type ReaderAudioSentence = {
   text: string;
   pageNumber: number;
   sentenceNumber: number;
+  pageTransitions: Array<{ pageIndex: number; progress: number }>;
 };
 
 const MAX_TTS_BYTES = 3800;
@@ -73,6 +74,57 @@ export function cleanReaderAudioText(text: string): string {
     .trim();
 }
 
+function measureParagraphPageTransitions(
+  span: HTMLElement,
+  rootLeft: number,
+  stride: number,
+): Array<{ pageIndex: number; progress: number }> {
+  const box = span.getBoundingClientRect();
+  if (box.width <= stride) return [];
+
+  const textNode = span.firstChild;
+  if (!textNode || textNode.nodeType !== Node.TEXT_NODE) return [];
+  const text = textNode.textContent ?? "";
+  if (!text) return [];
+
+  const Segmenter = (Intl as typeof Intl & {
+    Segmenter?: new (locale: string, options: { granularity: "word" }) => {
+      segment: (value: string) => Iterable<{ segment: string; index: number }>;
+    };
+  }).Segmenter;
+  const segments = Segmenter
+    ? Array.from(new Segmenter("ko", { granularity: "word" }).segment(text))
+    : Array.from(text.matchAll(/\S+\s*|\s+/g), (match) => ({
+        segment: match[0],
+        index: match.index ?? 0,
+      }));
+
+  const pageWeights = new Map<number, number>();
+  const range = document.createRange();
+  for (const part of segments) {
+    range.setStart(textNode, part.index);
+    range.setEnd(textNode, part.index + part.segment.length);
+    const rects = Array.from(range.getClientRects());
+    if (rects.length === 0) continue;
+    const weight = Array.from(part.segment).length / rects.length;
+    for (const rect of rects) {
+      const page = Math.floor(Math.max(0, rect.left - rootLeft) / stride);
+      pageWeights.set(page, (pageWeights.get(page) ?? 0) + weight);
+    }
+  }
+  range.detach?.();
+
+  const pages = [...pageWeights.entries()].sort((a, b) => a[0] - b[0]);
+  const total = pages.reduce((sum, [, weight]) => sum + weight, 0);
+  if (pages.length < 2 || total <= 0) return [];
+
+  let elapsedWeight = 0;
+  return pages.slice(0, -1).map(([pageIndex, weight], index) => {
+    elapsedWeight += weight;
+    return { pageIndex: pages[index + 1][0], progress: elapsedWeight / total };
+  });
+}
+
 export function collectPageAudioSentences(
   root: HTMLElement | null,
   pageIndex: number,
@@ -93,6 +145,7 @@ export function collectPageAudioSentences(
       text,
       pageNumber: pageIndex + 1,
       sentenceNumber: rows.length,
+      pageTransitions: measureParagraphPageTransitions(span, rootLeft, stride),
     });
   }
   return rows;
