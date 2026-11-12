@@ -187,8 +187,11 @@ export async function listBookAudioCache(limit = 100) {
   if (error) throw new Error(`오디오 캐시 목록을 불러오지 못했습니다: ${error.message}`);
 
   const bookIds = [...new Set((data ?? []).map((row) => Number(row.book_id)))];
-  const books = await Promise.all(bookIds.map(async (id) => [id, await getBookById(id)] as const));
-  const titles = new Map(books.map(([id, book]) => [id, book?.title ?? `도서 #${id}`]));
+  const { data: books, error: booksError } = bookIds.length
+    ? await supabase.from("books").select("id,title").in("id", bookIds)
+    : { data: [], error: null };
+  if (booksError) throw new Error(`도서 제목을 불러오지 못했습니다: ${booksError.message}`);
+  const titles = new Map((books ?? []).map((book) => [Number(book.id), book.title]));
 
   return (data ?? []).map((row) => ({
     cacheKey: row.cache_key,
@@ -213,18 +216,18 @@ export async function deleteBookAudioCache(cacheKey: string) {
   if (!data) return { deleted: false, storageRemoved: true };
   if (data.status === "generating") throw new Error("생성 중인 음성은 잠시 후 삭제해 주세요.");
 
-  // Remove the cache record first so the next listen request creates a fresh audio file.
+  const { error: storageError } = await supabase.storage.from(AUDIO_BUCKET).remove([data.storage_path]);
+  if (storageError) {
+    throw new Error(`저장된 음성 파일을 삭제하지 못했습니다: ${storageError.message}`);
+  }
+
+  // Delete the cache record after the MP3 is removed. The next request can then regenerate it.
   const { error: deleteError } = await supabase
     .from("book_audio_cache")
     .delete()
     .eq("cache_key", cacheKey);
   if (deleteError) throw new Error(`오디오 캐시 기록을 삭제하지 못했습니다: ${deleteError.message}`);
 
-  const { error: storageError } = await supabase.storage.from(AUDIO_BUCKET).remove([data.storage_path]);
-  if (storageError) {
-    console.error("Book audio file cleanup failed:", storageError.message);
-    return { deleted: true, storageRemoved: false };
-  }
   // Monthly usage remains as an audit of TTS already generated and billed.
   return { deleted: true, storageRemoved: true };
 }
