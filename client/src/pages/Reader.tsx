@@ -561,10 +561,15 @@ export default function Reader() {
       setAudioActiveSentenceId(audioQueue[audioIndex + 1].id);
       return;
     }
-    if (audioPage + 1 < totalPages) {
-      setCurrentPage(audioPage + 1);
+    const item = audioQueue[audioIndex];
+    const crossedPage = item?.pageTransitions[item.pageTransitions.length - 1]?.pageIndex;
+    const nextPage = crossedPage !== undefined && crossedPage > audioPage
+      ? crossedPage
+      : audioPage + 1;
+    if (nextPage < totalPages) {
+      setCurrentPage(nextPage);
       setAudioQueue([]);
-      setAudioRequest({ page: audioPage + 1, sentenceId: null, nonce: Date.now() });
+      setAudioRequest({ page: nextPage, sentenceId: null, nonce: Date.now() });
       return;
     }
     setIsAudioPlaying(false);
@@ -579,7 +584,17 @@ export default function Reader() {
     const audio = audioElementRef.current;
     const token = ++audioPlayTokenRef.current;
     let cancelled = false;
+    let nextPageTransition = 0;
     const stillCurrent = () => !cancelled && token === audioPlayTokenRef.current;
+    const followSpokenPage = (progress: number) => {
+      if (!stillCurrent()) return;
+      while (nextPageTransition < item.pageTransitions.length &&
+        progress >= item.pageTransitions[nextPageTransition].progress) {
+        const pageIndex = item.pageTransitions[nextPageTransition].pageIndex;
+        setCurrentPage((page) => Math.max(page, pageIndex));
+        nextPageTransition += 1;
+      }
+    };
     const speakInBrowser = () => {
       if (!stillCurrent()) return;
       setAudioUsesBrowserVoice(true);
@@ -587,7 +602,17 @@ export default function Reader() {
       const utterance = new SpeechSynthesisUtterance(item.text);
       utterance.lang = "ko-KR";
       utterance.rate = audioSpeed;
-      utterance.onend = () => { if (stillCurrent()) advanceAudio(); };
+      utterance.onboundary = (event) => {
+        if (event.charIndex >= 0 && item.text.length > 0) {
+          followSpokenPage(event.charIndex / item.text.length);
+        }
+      };
+      utterance.onend = () => {
+        if (stillCurrent()) {
+          followSpokenPage(1);
+          advanceAudio();
+        }
+      };
       utterance.onerror = () => { if (stillCurrent()) advanceAudio(); };
       window.speechSynthesis.cancel();
       window.speechSynthesis.speak(utterance);
@@ -603,14 +628,22 @@ export default function Reader() {
       setAudioUsesBrowserVoice(false);
       audio.src = result.audioUrl;
       audio.playbackRate = audioSpeed;
-      audio.onended = () => { if (stillCurrent()) advanceAudio(); };
+      audio.ontimeupdate = () => {
+        if (audio.duration > 0) followSpokenPage(audio.currentTime / audio.duration);
+      };
+      audio.onended = () => {
+        if (stillCurrent()) {
+          followSpokenPage(1);
+          advanceAudio();
+        }
+      };
       audio.onerror = speakInBrowser;
       setIsAudioLoading(false);
       void audio.play().catch(speakInBrowser);
     }).catch(speakInBrowser);
     return () => {
       cancelled = true;
-      if (audio) { audio.pause(); audio.onended = null; audio.onerror = null; }
+      if (audio) { audio.pause(); audio.onended = null; audio.onerror = null; audio.ontimeupdate = null; }
       window.speechSynthesis?.cancel();
     };
   }, [isAudioPlaying, audioQueue, audioIndex, audioSpeed, bookId, audioMutation.mutateAsync, advanceAudio]);
