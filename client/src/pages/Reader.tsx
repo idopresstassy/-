@@ -169,7 +169,6 @@ export default function Reader() {
 
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
-  const [showAudioPanel, setShowAudioPanel] = useState(false);
   const [audioQueue, setAudioQueue] = useState<ReaderAudioSentence[]>([]);
   const [audioIndex, setAudioIndex] = useState(0);
   const [audioPage, setAudioPage] = useState(0);
@@ -796,12 +795,12 @@ export default function Reader() {
 
         <div className="flex items-center gap-1">
           <button
-            onClick={() => setShowAudioPanel((visible) => !visible)}
-            className={`p-2 hover:bg-black/5 rounded-full transition-colors ${showAudioPanel ? "text-amber-600" : ""}`}
-            title="오디오 낭독"
-            aria-label="오디오 낭독"
+            onClick={toggleAudioPlayback}
+            className={`p-2 hover:bg-black/5 rounded-full transition-colors ${isAudioPlaying ? "text-amber-600" : ""}`}
+            title={isAudioPlaying ? "낭독 일시정지" : "낭독 시작"}
+            aria-label={isAudioPlaying ? "낭독 일시정지" : "낭독 시작"}
           >
-            <Volume2 className="w-5 h-5" />
+            {isAudioPlaying ? <Pause className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
           </button>
           {tocItems.length > 0 && (
             <button
@@ -935,7 +934,7 @@ export default function Reader() {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className={`absolute top-16 right-4 p-5 rounded-xl shadow-2xl border z-30 w-80 ${
+            className={`absolute top-16 right-4 p-5 rounded-xl shadow-2xl border z-30 w-80 max-h-[70vh] overflow-y-auto ${
               theme === "dark"
                 ? "bg-gray-800 border-gray-700"
                 : "bg-white border-gray-100"
@@ -1022,6 +1021,39 @@ export default function Reader() {
                     ↕ 스크롤
                   </button>
                 </div>
+              </div>
+
+              {/* Audio playback */}
+              <div>
+                <p className="text-xs font-bold mb-3 opacity-60 uppercase tracking-wider">오디오 낭독</p>
+                <div className="flex items-center justify-between gap-2 rounded-lg border border-border p-2">
+                  <button onClick={() => skipAudioSentence(-1)} className="p-2 rounded hover:bg-black/5" title="이전 문단" aria-label="이전 문단">
+                    <SkipBack className="w-5 h-5" />
+                  </button>
+                  <button
+                    onClick={toggleAudioPlayback}
+                    disabled={isAudioLoading && !isAudioPlaying}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-full bg-amber-600 px-3 py-2 text-white text-sm disabled:opacity-50"
+                  >
+                    {isAudioLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : isAudioPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                    {isAudioLoading ? "준비 중" : isAudioPlaying ? "일시정지" : "듣기"}
+                  </button>
+                  <button onClick={() => skipAudioSentence(1)} className="p-2 rounded hover:bg-black/5" title="다음 문단" aria-label="다음 문단">
+                    <SkipForward className="w-5 h-5" />
+                  </button>
+                </div>
+                <label className="mt-3 flex items-center justify-between gap-3 text-sm">
+                  <span>읽기 속도</span>
+                  <select
+                    value={audioSpeed}
+                    onChange={(event) => setAudioSpeed(Number(event.target.value))}
+                    className="rounded border border-border bg-background px-3 py-2"
+                    aria-label="낭독 속도"
+                  >
+                    {[0.8, 1, 1.2, 1.5].map((speed) => <option key={speed} value={speed}>{speed.toFixed(1)}배</option>)}
+                  </select>
+                </label>
+                {audioUsesBrowserVoice && <p className="mt-2 text-xs text-muted-foreground">브라우저 기본 음성 사용 중</p>}
               </div>
 
               {/* Font Size */}
@@ -1320,33 +1352,6 @@ export default function Reader() {
             </button>
           </div>
         </div>
-        {showAudioPanel && (
-          <div className="flex flex-wrap items-center justify-center gap-2 py-2 border-t border-black/5">
-            <span className="text-xs font-medium mr-1">오디오 낭독</span>
-            <button onClick={() => skipAudioSentence(-1)} className="p-2 hover:text-amber-600" title="이전 문단" aria-label="이전 문단"><SkipBack className="w-4 h-4" /></button>
-            <button
-              onClick={toggleAudioPlayback}
-              disabled={isAudioLoading && !isAudioPlaying}
-              className="flex items-center gap-1 rounded-full bg-amber-600 px-4 py-2 text-white text-sm disabled:opacity-50"
-            >
-              {isAudioLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : isAudioPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-              {isAudioLoading ? "준비 중" : isAudioPlaying ? "일시정지" : "듣기"}
-            </button>
-            <button onClick={() => skipAudioSentence(1)} className="p-2 hover:text-amber-600" title="다음 문단" aria-label="다음 문단"><SkipForward className="w-4 h-4" /></button>
-            <label className="flex items-center gap-1 text-xs ml-2">
-              속도
-              <select
-                value={audioSpeed}
-                onChange={(event) => setAudioSpeed(Number(event.target.value))}
-                className="rounded border border-border bg-background px-2 py-1 text-xs"
-                aria-label="낭독 속도"
-              >
-                {[0.8, 1, 1.2, 1.5].map((speed) => <option key={speed} value={speed}>{speed.toFixed(1)}배</option>)}
-              </select>
-            </label>
-            {audioUsesBrowserVoice && <span className="text-[11px] text-muted-foreground">브라우저 기본 음성 사용 중</span>}
-          </div>
-        )}
       </footer>
     </div>
   );
