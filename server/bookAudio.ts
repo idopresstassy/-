@@ -5,6 +5,7 @@ import { getBookById } from "./supabaseDb";
 const AUDIO_BUCKET = "book-audio";
 const DEFAULT_VOICE = "ko-KR-Chirp3-HD-Achernar";
 const MONTHLY_CHARACTER_LIMIT = 900_000;
+const COMMA_PAUSE_CACHE_VERSION = "comma-pause-v1";
 let cachedToken: { value: string; expiresAt: number } | null = null;
 
 function sha256(value: string) {
@@ -121,7 +122,7 @@ export async function getOrCreateBookSentenceAudio(input: AudioRequest) {
   const addCommaPauses = pauseSetting === "all" || (Number.isInteger(pauseBookId) && pauseBookId === input.bookId);
   const cacheBase = `${input.bookId}:${input.pageNumber}:${input.sentenceNumber}:${voiceName}:${sourceHash}`;
   // Use a new cache version so existing audio is preserved and regenerated on demand with pauses.
-  const cacheKey = sha256(addCommaPauses ? `${cacheBase}:comma-pause-v1` : cacheBase);
+  const cacheKey = sha256(addCommaPauses ? `${cacheBase}:${COMMA_PAUSE_CACHE_VERSION}` : cacheBase);
   const storagePath = `${input.bookId}/${input.pageNumber}/${voiceName}/${cacheKey}.mp3`;
   const supabase = getSupabaseAdmin();
   const { data: reservation, error: reserveError } = await supabase.rpc("reserve_book_audio", {
@@ -237,6 +238,84 @@ export async function deleteBookAudioCache(cacheKey: string) {
 
   // Monthly usage remains as an audit of TTS already generated and billed.
   return { deleted: true, storageRemoved: true };
+}
+
+type BookAudioCacheRow = {
+  cache_key: string;
+  book_id: number;
+  page_number: number;
+  sentence_number: number;
+  voice_name: string;
+  source_hash: string;
+  status: string;
+  storage_path: string | null;
+};
+
+async function getAllBookAudioCacheRows() {
+  const supabase = getSupabaseAdmin();
+  const rows: BookAudioCacheRow[] = [];
+  const pageSize = 500;
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase
+      .from("book_audio_cache")
+      .select("cache_key,book_id,page_number,sentence_number,voice_name,source_hash,status,storage_path")
+      .order("created_at", { ascending: false })
+      .range(offset, offset + pageSize - 1);
+    if (error) throw new Error(`오디오 캐시 목록을 불러오지 못했습니다: ${error.message}`);
+    rows.push(...((data ?? []) as BookAudioCacheRow[]));
+    if (!data || data.length < pageSize) break;
+  }
+  return rows;
+}
+
+function isCurrentCommaPauseCache(row: BookAudioCacheRow) {
+  const cacheBase = `${row.book_id}:${row.page_number}:${row.sentence_number}:${row.voice_name}:${row.source_hash}`;
+  return row.cache_key === sha256(`${cacheBase}:${COMMA_PAUSE_CACHE_VERSION}`);
+}
+
+export async function getLegacyBookAudioCachePreview() {
+  const rows = await getAllBookAudioCacheRows();
+  const legacy = rows.filter((row) => !isCurrentCommaPauseCache(row));
+  return {
+    legacyCount: legacy.filter((row) => row.status !== "generating" && row.status !== "pending").length,
+    currentPauseCount: rows.filter(isCurrentCommaPauseCache).length,
+    skippedInProgress: legacy.filter((row) => row.status === "generating" || row.status === "pending").length,
+  };
+}
+
+export async function deleteLegacyBookAudioCache() {
+  const supabase = getSupabaseAdmin();
+  const rows = await getAllBookAudioCacheRows();
+  const currentPauseCount = rows.filter(isCurrentCommaPauseCache).length;
+  const inProgress = rows.filter((row) =>
+    !isCurrentCommaPauseCache(row) && (row.status === "generating" || row.status === "pending")
+  );
+  const legacy = rows.filter((row) =>
+    !isCurrentCommaPauseCache(row) && row.status !== "generating" && row.status !== "pending"
+  );
+  let deletedRecords = 0;
+  let deletedFiles = 0;
+
+  for (let offset = 0; offset < legacy.length; offset += 100) {
+    const batch = legacy.slice(offset, offset + 100);
+    const paths = batch.map((row) => row.storage_path).filter((path): path is string => Boolean(path));
+    if (paths.length > 0) {
+      const { error: storageError } = await supabase.storage.from(AUDIO_BUCKET).remove(paths);
+      if (storageError) throw new Error(`이전 낭독 파일을 삭제하지 못했습니다: ${storageError.message}`);
+      deletedFiles += paths.length;
+    }
+    const keys = batch.map((row) => row.cache_key);
+    const { error: deleteError } = await supabase.from("book_audio_cache").delete().in("cache_key", keys);
+    if (deleteError) throw new Error(`이전 낭독 캐시 기록을 삭제하지 못했습니다: ${deleteError.message}`);
+    deletedRecords += keys.length;
+  }
+
+  return {
+    deletedRecords,
+    deletedFiles,
+    preservedCurrentPauseFiles: currentPauseCount,
+    skippedInProgress: inProgress.length,
+  };
 }
 
 export async function getBookAudioMonthlyUsage() {
