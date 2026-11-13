@@ -2,7 +2,7 @@ import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import * as db from "./supabaseDb";
-import { deleteBookAudioCache, getBookAudioMonthlyUsage, getOrCreateBookSentenceAudio, listBookAudioCache } from "./bookAudio";
+import { deleteBookAudioCache, deleteLegacyBookAudioCache, getBookAudioMonthlyUsage, getLegacyBookAudioCachePreview, getOrCreateBookSentenceAudio, listBookAudioCache } from "./bookAudio";
 
 export const appRouter = router({
   auth: router({
@@ -242,6 +242,8 @@ export const appRouter = router({
       delete: adminProcedure
         .input(z.object({ cacheKey: z.string().regex(/^[a-f0-9]{64}$/i) }))
         .mutation(async ({ input }) => deleteBookAudioCache(input.cacheKey)),
+      previewLegacy: adminProcedure.query(async () => getLegacyBookAudioCachePreview()),
+      deleteLegacy: adminProcedure.mutation(async () => deleteLegacyBookAudioCache()),
     }),
     stats: adminProcedure.query(async () => {
       const [totalUsers, todayVisitors, weeklyVisitors, monthlyVisitors, yearlyVisitors, dailyVisitors, popularBooks] = await Promise.all([
