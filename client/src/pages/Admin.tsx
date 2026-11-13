@@ -281,6 +281,7 @@ function DashboardTab() {
 // ==================== AUDIO CACHE TAB ====================
 function AudioCacheTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> }) {
   const { data: entries, isLoading, refetch, isFetching } = trpc.admin.bookAudioCache.list.useQuery({ limit: 100 });
+  const { data: cleanupPreview, refetch: refetchCleanupPreview, isFetching: previewFetching } = trpc.admin.bookAudioCache.previewLegacy.useQuery();
   const deleteAudio = trpc.admin.bookAudioCache.delete.useMutation({
     onSuccess: (result) => {
       void utils.admin.bookAudioCache.list.invalidate();
@@ -290,6 +291,28 @@ function AudioCacheTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> }) {
     },
     onError: (error) => toast.error(error.message || "낭독 음성을 삭제하지 못했습니다."),
   });
+
+  const deleteLegacy = trpc.admin.bookAudioCache.deleteLegacy.useMutation({
+    onSuccess: (result) => {
+      void utils.admin.bookAudioCache.list.invalidate();
+      void utils.admin.bookAudioCache.previewLegacy.invalidate();
+      void utils.admin.bookAudioUsage.invalidate();
+      toast.success(`이전 음성 ${result.deletedFiles}개를 삭제했습니다. 쉼표 pause 버전 ${result.preservedCurrentPauseFiles}개는 보존했습니다.`);
+    },
+    onError: (error) => toast.error(error.message || "이전 음성을 삭제하지 못했습니다."),
+  });
+
+  const handleDeleteLegacy = () => {
+    const legacyCount = cleanupPreview?.legacyCount ?? 0;
+    if (legacyCount === 0) {
+      toast.success("삭제할 이전 음성이 없습니다.");
+      return;
+    }
+    const confirmed = window.confirm(
+      `쉼표 pause 적용 전 낭독 음성 ${legacyCount}개와 MP3 파일을 모두 삭제할까요? 현재 쉼표 pause 버전 ${cleanupPreview?.currentPauseCount ?? 0}개는 보존됩니다. 삭제한 문장은 다음 재생 때 새로 생성되고, Google 사용량에 다시 포함됩니다.`
+    );
+    if (confirmed) deleteLegacy.mutate();
+  };
 
   const handleDelete = (entry: NonNullable<typeof entries>[number]) => {
     const confirmed = window.confirm(
@@ -303,11 +326,19 @@ function AudioCacheTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold">낭독 음성 관리</h2>
-          <p className="text-sm text-muted-foreground mt-1">잘못 만들어진 음성만 삭제하세요. 삭제한 음성은 다음에 들을 때 다시 생성됩니다.</p>
+          <p className="text-sm text-muted-foreground mt-1">쉼표 pause 적용 전 음성은 새 버전으로 다시 생성되며, 기존 MP3 파일은 정리할 수 있습니다.</p>
         </div>
-        <Button variant="outline" onClick={() => void refetch()} disabled={isFetching}>
-          {isFetching && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}새로고침
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-muted-foreground">
+            {previewFetching ? "이전 음성 확인 중..." : `이전 음성 ${cleanupPreview?.legacyCount ?? 0}개 · 새 버전 ${cleanupPreview?.currentPauseCount ?? 0}개 보존`}
+          </span>
+          <Button variant="destructive" onClick={handleDeleteLegacy} disabled={previewFetching || deleteLegacy.isPending || (cleanupPreview?.legacyCount ?? 0) === 0}>
+            {deleteLegacy.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}이전 음성 파일 정리
+          </Button>
+          <Button variant="outline" onClick={() => { void refetch(); void refetchCleanupPreview(); }} disabled={isFetching || previewFetching}>
+            {(isFetching || previewFetching) && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}새로고침
+          </Button>
+        </div>
       </div>
 
       <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
