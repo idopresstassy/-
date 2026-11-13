@@ -54,7 +54,7 @@ async function getAccessToken(account: NonNullable<ReturnType<typeof serviceAcco
   return token.access_token;
 }
 
-async function synthesize(text: string, voiceName: string) {
+async function synthesize(text: string, voiceName: string, addCommaPauses = false) {
   const account = serviceAccount();
   if (!account) throw new Error("Google TTS service account is not configured");
   const token = await getAccessToken(account);
@@ -62,7 +62,9 @@ async function synthesize(text: string, voiceName: string) {
     method: "POST",
     headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
     body: JSON.stringify({
-      input: { text },
+      input: addCommaPauses
+        ? { markup: text.replace(/,(\s*)/g, ", [pause short]$1") }
+        : { text },
       voice: { languageCode: "ko-KR", name: voiceName },
       audioConfig: { audioEncoding: "MP3", speakingRate: 1 },
     }),
@@ -114,7 +116,11 @@ export async function getOrCreateBookSentenceAudio(input: AudioRequest) {
   if (!serviceAccount()) return { fallback: true as const, reason: "not_configured" as const };
 
   const sourceHash = sha256(text);
-  const cacheKey = sha256(`${input.bookId}:${input.pageNumber}:${input.sentenceNumber}:${voiceName}:${sourceHash}`);
+  const pausePilotBookId = Number(process.env.GOOGLE_TTS_PAUSE_TEST_BOOK_ID);
+  const addCommaPauses = Number.isInteger(pausePilotBookId) && pausePilotBookId === input.bookId;
+  const cacheBase = `${input.bookId}:${input.pageNumber}:${input.sentenceNumber}:${voiceName}:${sourceHash}`;
+  // Keep old clips for every other book; generate a separate cache version for the pilot book.
+  const cacheKey = sha256(addCommaPauses ? `${cacheBase}:comma-pause-v1` : cacheBase);
   const storagePath = `${input.bookId}/${input.pageNumber}/${voiceName}/${cacheKey}.mp3`;
   const supabase = getSupabaseAdmin();
   const { data: reservation, error: reserveError } = await supabase.rpc("reserve_book_audio", {
@@ -150,7 +156,7 @@ export async function getOrCreateBookSentenceAudio(input: AudioRequest) {
 
   let audio: Buffer;
   try {
-    audio = await synthesize(text, voiceName);
+    audio = await synthesize(text, voiceName, addCommaPauses);
   } catch (error) {
     await supabase.rpc("fail_book_audio", {
       p_cache_key: cacheKey, p_characters: text.length, p_release_usage: true,
