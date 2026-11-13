@@ -116,10 +116,11 @@ export async function getOrCreateBookSentenceAudio(input: AudioRequest) {
   if (!serviceAccount()) return { fallback: true as const, reason: "not_configured" as const };
 
   const sourceHash = sha256(text);
-  const pausePilotBookId = Number(process.env.GOOGLE_TTS_PAUSE_TEST_BOOK_ID);
-  const addCommaPauses = Number.isInteger(pausePilotBookId) && pausePilotBookId === input.bookId;
+  const pauseSetting = process.env.GOOGLE_TTS_PAUSE_TEST_BOOK_ID?.trim().toLowerCase() || "";
+  const pauseBookId = Number(pauseSetting);
+  const addCommaPauses = pauseSetting === "all" || (Number.isInteger(pauseBookId) && pauseBookId === input.bookId);
   const cacheBase = `${input.bookId}:${input.pageNumber}:${input.sentenceNumber}:${voiceName}:${sourceHash}`;
-  // Keep old clips for every other book; generate a separate cache version for the pilot book.
+  // Use a new cache version so existing audio is preserved and regenerated on demand with pauses.
   const cacheKey = sha256(addCommaPauses ? `${cacheBase}:comma-pause-v1` : cacheBase);
   const storagePath = `${input.bookId}/${input.pageNumber}/${voiceName}/${cacheKey}.mp3`;
   const supabase = getSupabaseAdmin();
