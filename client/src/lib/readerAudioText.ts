@@ -195,7 +195,7 @@ function getSpokenTextByPage(
     pageText.set(page, (pageText.get(page) ?? "") + text.slice(character.offset, character.offset + character.length));
   }
   range.detach?.();
-  return new Map([...pageText.entries()].map(([page, value]) => [page, value.trim()]).filter(([, value]) => value.length > 0));
+  return new Map([...pageText.entries()].filter(([, value]) => value.trim().length > 0));
 }
 
 export function collectPageAudioSentences(
@@ -215,28 +215,28 @@ export function collectPageAudioSentences(
 
     const pageParts = getSpokenTextByPage(span, rootLeft, stride);
     const pageText = pageParts.get(pageIndex);
-    if (pageText) {
+    if (pageText?.trim()) {
       // Keep a paragraph that crosses a visual page boundary as one TTS clip.
       // The page changes while that clip is playing, so the voice does not stop
       // and restart at the column edge.
       const visibleParts = [...pageParts.entries()]
         .filter(([page, text]) => page >= pageIndex && text.trim().length > 0)
         .sort(([leftPage], [rightPage]) => leftPage - rightPage)
-        .map(([pageIndex, text]) => ({ pageIndex, text: cleanReaderAudioText(text) }))
-        .filter((part) => part.text.length > 0);
-      const totalCharacters = visibleParts.reduce((sum, part) => sum + part.text.length, Math.max(0, visibleParts.length - 1));
-      let elapsedCharacters = visibleParts[0]?.text.length ?? 0;
+        .map(([pageIndex, text]) => ({ pageIndex, text, spokenText: cleanReaderAudioText(text) }))
+        .filter((part) => part.spokenText.length > 0);
+      const totalCharacters = visibleParts.reduce((sum, part) => sum + part.spokenText.length, 0);
+      let elapsedCharacters = visibleParts[0]?.spokenText.length ?? 0;
       const pageTransitions = visibleParts.slice(1).map((part, index) => {
         const transition = {
           pageIndex: part.pageIndex,
           progress: totalCharacters > 0 ? Math.min(1, elapsedCharacters / totalCharacters) : 1,
         };
-        elapsedCharacters += part.text.length + 1;
+        elapsedCharacters += part.spokenText.length;
         return transition;
       });
       rows.push({
         id: sentenceId,
-        text: visibleParts.map((part) => part.text).join(" "),
+        text: cleanReaderAudioText(visibleParts.map((part) => part.text).join("")),
         pageNumber: pageIndex + 1,
         sentenceNumber: rows.length,
         pageTransitions,
