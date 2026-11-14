@@ -523,6 +523,7 @@ export default function Reader() {
     setIsAudioLoading(false);
     audioPlayTokenRef.current += 1;
     audioElementRef.current?.pause();
+    (window as Window & { MyeongjakAudio?: { pause: () => void } }).MyeongjakAudio?.pause();
     window.speechSynthesis?.cancel();
   }, []);
 
@@ -576,6 +577,7 @@ export default function Reader() {
   };
 
   useEffect(() => {
+    if ((window as Window & { MyeongjakAudio?: unknown }).MyeongjakAudio) return;
     if (!("mediaSession" in navigator) || !navigator.mediaSession) return;
     const session = navigator.mediaSession;
     const setHandler = (action: MediaSessionAction, handler: MediaSessionActionHandler | null) => {
@@ -749,6 +751,15 @@ export default function Reader() {
     requestReaderAudio(item).then((result) => {
       if (!stillCurrent()) return;
       if (result.fallback) { speakInBrowser(); return; }
+      const nativeAudio = (window as Window & {
+        MyeongjakAudio?: { playTrack: (url: string, title: string, speed: number) => void };
+      }).MyeongjakAudio;
+      if (nativeAudio) {
+        setAudioUsesBrowserVoice(false);
+        setIsAudioLoading(false);
+        nativeAudio.playTrack(result.audioUrl, book?.title ?? "명작무료책방 낭독", audioSpeed);
+        return;
+      }
       if (!audio) { speakInBrowser(); return; }
       setAudioUsesBrowserVoice(false);
       audio.src = result.audioUrl;
@@ -772,7 +783,14 @@ export default function Reader() {
       if (audio) { audio.pause(); audio.onended = null; audio.onerror = null; audio.ontimeupdate = null; }
       window.speechSynthesis?.cancel();
     };
-  }, [isAudioPlaying, audioQueue, audioIndex, audioSpeed, bookId, requestReaderAudio, advanceAudio]);
+  }, [isAudioPlaying, audioQueue, audioIndex, audioSpeed, bookId, book?.title, requestReaderAudio, advanceAudio]);
+
+  // Native Android service reports clip completion even with the display locked.
+  useEffect(() => {
+    const handleNativeAudioEnded = () => advanceAudio();
+    window.addEventListener("myeongjak-native-audio-ended", handleNativeAudioEnded);
+    return () => window.removeEventListener("myeongjak-native-audio-ended", handleNativeAudioEnded);
+  }, [advanceAudio]);
 
   // Prepare the next two clips while the current clip is playing to reduce silence.
   useEffect(() => {
