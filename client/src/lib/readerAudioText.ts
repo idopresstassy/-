@@ -202,6 +202,7 @@ export function collectPageAudioSentences(
   root: HTMLElement | null,
   pageIndex: number,
   stride: number,
+  excludedSentenceIds: ReadonlySet<number> = new Set(),
 ): ReaderAudioSentence[] {
   if (!root || stride <= 0) return [];
   const spans = Array.from(root.querySelectorAll<HTMLElement>("[data-audio-sentence-id]"));
@@ -209,15 +210,36 @@ export function collectPageAudioSentences(
   const rows: ReaderAudioSentence[] = [];
   for (const span of spans) {
     if (!span.closest<HTMLElement>("[data-line-index]")) continue;
+    const sentenceId = Number(span.dataset.audioSentenceId);
+    if (excludedSentenceIds.has(sentenceId)) continue;
+
     const pageParts = getSpokenTextByPage(span, rootLeft, stride);
     const pageText = pageParts.get(pageIndex);
     if (pageText) {
+      // Keep a paragraph that crosses a visual page boundary as one TTS clip.
+      // The page changes while that clip is playing, so the voice does not stop
+      // and restart at the column edge.
+      const visibleParts = [...pageParts.entries()]
+        .filter(([page, text]) => page >= pageIndex && text.trim().length > 0)
+        .sort(([leftPage], [rightPage]) => leftPage - rightPage)
+        .map(([pageIndex, text]) => ({ pageIndex, text: cleanReaderAudioText(text) }))
+        .filter((part) => part.text.length > 0);
+      const totalCharacters = visibleParts.reduce((sum, part) => sum + part.text.length, Math.max(0, visibleParts.length - 1));
+      let elapsedCharacters = visibleParts[0]?.text.length ?? 0;
+      const pageTransitions = visibleParts.slice(1).map((part, index) => {
+        const transition = {
+          pageIndex: part.pageIndex,
+          progress: totalCharacters > 0 ? Math.min(1, elapsedCharacters / totalCharacters) : 1,
+        };
+        elapsedCharacters += part.text.length + 1;
+        return transition;
+      });
       rows.push({
-        id: Number(span.dataset.audioSentenceId),
-        text: pageText,
+        id: sentenceId,
+        text: visibleParts.map((part) => part.text).join(" "),
         pageNumber: pageIndex + 1,
         sentenceNumber: rows.length,
-        pageTransitions: [],
+        pageTransitions,
       });
       continue;
     }
