@@ -218,6 +218,7 @@ export default function Reader() {
   const audioPlayTokenRef = useRef(0);
   const prefetchedPageRef = useRef<number | null>(null);
   const completedAudioSentenceIdsRef = useRef(new Set<number>());
+  const prefetchedPageRowsRef = useRef<{ page: number; rows: ReaderAudioSentence[] } | null>(null);
   const audioProgressKey = `reader_audio_progress_${bookId}`;
   const audioMutation = trpc.readerAudio.getOrCreate.useMutation();
   const audioRequestCacheRef = useRef(new Map<string, ReturnType<typeof audioMutation.mutateAsync>>());
@@ -525,7 +526,11 @@ export default function Reader() {
 
   const requestAudioPage = useCallback((page: number, sentenceId: number | null = null, continueAfterPage = false) => {
     const safePage = Math.max(0, Math.min(page, totalPages - 1));
-    if (!continueAfterPage) completedAudioSentenceIdsRef.current.clear();
+    if (!continueAfterPage) {
+      completedAudioSentenceIdsRef.current.clear();
+      prefetchedPageRowsRef.current = null;
+      prefetchedPageRef.current = null;
+    }
     setReadMode("page");
     setCurrentPage(safePage);
     setAudioQueue([]);
@@ -641,7 +646,19 @@ export default function Reader() {
     const nextPage = crossedPage > audioPage ? crossedPage : audioPage + 1;
     if (nextPage < totalPages) {
       for (const row of audioQueue) completedAudioSentenceIdsRef.current.add(row.id);
-      requestAudioPage(nextPage, null, true);
+      const preparedPage = prefetchedPageRowsRef.current;
+      if (preparedPage?.page === nextPage && preparedPage.rows.length > 0) {
+        prefetchedPageRowsRef.current = null;
+        setCurrentPage(nextPage);
+        setAudioPage(nextPage);
+        setAudioQueue(preparedPage.rows);
+        setAudioIndex(0);
+        setAudioActiveSentenceId(preparedPage.rows[0].id);
+        setIsAudioPlaying(true);
+        setIsAudioLoading(false);
+      } else {
+        requestAudioPage(nextPage, null, true);
+      }
       return;
     }
     setIsAudioPlaying(false);
@@ -760,6 +777,7 @@ export default function Reader() {
       const rows = collectPageAudioSentences(contentRef.current, nextPage, stride, alreadyQueued);
       if (rows.length === 0) return;
       prefetchedPageRef.current = nextPage;
+      prefetchedPageRowsRef.current = { page: nextPage, rows };
       void Promise.all(rows.slice(0, 2).map((row) => prepareReaderAudio(row).catch(() => undefined)));
     });
     return () => cancelAnimationFrame(frame);
