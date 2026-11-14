@@ -594,6 +594,57 @@ export default function Reader() {
     }
   }, [audioQueue, audioIndex, audioPage, currentPage, totalPages, requestAudioPage]);
 
+  // Expose narration controls to Android Chrome's lock-screen media session.
+  // This lets the browser keep the audio session active while the display is off.
+  const audioSessionControlsRef = useRef({
+    play: () => {},
+    pause: () => {},
+    previous: () => {},
+    next: () => {},
+  });
+  audioSessionControlsRef.current = {
+    play: () => { if (!isAudioPlaying) toggleAudioPlayback(); },
+    pause: () => { if (isAudioPlaying) pauseAudio(); },
+    previous: () => skipAudioSentence(-1),
+    next: () => skipAudioSentence(1),
+  };
+
+  useEffect(() => {
+    if (!("mediaSession" in navigator) || !navigator.mediaSession) return;
+    const session = navigator.mediaSession;
+    const setHandler = (action: MediaSessionAction, handler: MediaSessionActionHandler | null) => {
+      try { session.setActionHandler(action, handler); } catch { /* Ignore unsupported media actions. */ }
+    };
+    setHandler("play", () => audioSessionControlsRef.current.play());
+    setHandler("pause", () => audioSessionControlsRef.current.pause());
+    setHandler("previoustrack", () => audioSessionControlsRef.current.previous());
+    setHandler("nexttrack", () => audioSessionControlsRef.current.next());
+    return () => {
+      setHandler("play", null);
+      setHandler("pause", null);
+      setHandler("previoustrack", null);
+      setHandler("nexttrack", null);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!("mediaSession" in navigator) || !navigator.mediaSession) return;
+    const session = navigator.mediaSession;
+    if (audioQueue.length > 0) {
+      if ("MediaMetadata" in window) {
+        session.metadata = new MediaMetadata({
+          title: book?.title ?? "도서 낭독",
+          artist: "명작무료책방",
+          album: "오디오 낭독",
+        });
+      }
+      session.playbackState = isAudioPlaying ? "playing" : "paused";
+    } else {
+      session.playbackState = "none";
+      session.metadata = null;
+    }
+  }, [book?.title, audioQueue.length, isAudioPlaying]);
+
   const renderAudioLine = useCallback((line: string, lineIndex: number) => (
     <p key={lineIndex} data-line-index={lineIndex} className="mb-4 sm:mb-6" style={{ textIndent: "1em" }}>
       {displaySentences[lineIndex]?.map((sentence) => (
