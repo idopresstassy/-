@@ -217,6 +217,7 @@ export default function Reader() {
   const audioElementRef = useRef<HTMLAudioElement>(null);
   const audioPlayTokenRef = useRef(0);
   const prefetchedPageRef = useRef<number | null>(null);
+  const completedAudioSentenceIdsRef = useRef(new Set<number>());
   const audioProgressKey = `reader_audio_progress_${bookId}`;
   const audioMutation = trpc.readerAudio.getOrCreate.useMutation();
   const audioRequestCacheRef = useRef(new Map<string, ReturnType<typeof audioMutation.mutateAsync>>());
@@ -522,8 +523,9 @@ export default function Reader() {
     setCurrentPage((prev) => (prev > 0 ? prev - 1 : prev));
   }, []);
 
-  const requestAudioPage = useCallback((page: number, sentenceId: number | null = null) => {
+  const requestAudioPage = useCallback((page: number, sentenceId: number | null = null, continueAfterPage = false) => {
     const safePage = Math.max(0, Math.min(page, totalPages - 1));
+    if (!continueAfterPage) completedAudioSentenceIdsRef.current.clear();
     setReadMode("page");
     setCurrentPage(safePage);
     setAudioQueue([]);
@@ -611,7 +613,7 @@ export default function Reader() {
     firstFrame = requestAnimationFrame(() => {
       secondFrame = requestAnimationFrame(() => {
         if (cancelled) return;
-        const rows = collectPageAudioSentences(contentRef.current, audioRequest.page, stride);
+        const rows = collectPageAudioSentences(contentRef.current, audioRequest.page, stride, completedAudioSentenceIdsRef.current);
         const found = audioRequest.sentenceId === null ? 0 : rows.findIndex((row) => row.id === audioRequest.sentenceId);
         const index = audioRequest.sentenceId === -1 ? Math.max(0, rows.length - 1) : Math.max(0, found);
         setAudioQueue(rows);
@@ -632,21 +634,20 @@ export default function Reader() {
       setAudioActiveSentenceId(audioQueue[audioIndex + 1].id);
       return;
     }
-    const item = audioQueue[audioIndex];
-    const crossedPage = item?.pageTransitions[item.pageTransitions.length - 1]?.pageIndex;
-    const nextPage = crossedPage !== undefined && crossedPage > audioPage
-      ? crossedPage
-      : audioPage + 1;
+    const crossedPage = audioQueue.reduce((furthestPage, row) => {
+      const lastTransition = row.pageTransitions[row.pageTransitions.length - 1]?.pageIndex;
+      return lastTransition === undefined ? furthestPage : Math.max(furthestPage, lastTransition);
+    }, audioPage);
+    const nextPage = crossedPage > audioPage ? crossedPage : audioPage + 1;
     if (nextPage < totalPages) {
-      setCurrentPage(nextPage);
-      setAudioQueue([]);
-      setAudioRequest({ page: nextPage, sentenceId: null, nonce: Date.now() });
+      for (const row of audioQueue) completedAudioSentenceIdsRef.current.add(row.id);
+      requestAudioPage(nextPage, null, true);
       return;
     }
     setIsAudioPlaying(false);
     setAudioActiveSentenceId(null);
     setIsAudioLoading(false);
-  }, [audioIndex, audioQueue, audioPage, totalPages]);
+  }, [audioIndex, audioQueue, audioPage, totalPages, requestAudioPage]);
 
   // Synthesize or reuse one paragraph at a time. Quota/service failures use the browser voice.
   useEffect(() => {
@@ -752,7 +753,11 @@ export default function Reader() {
     const nextPage = audioPage + 1;
     if (prefetchedPageRef.current === nextPage) return;
     const frame = requestAnimationFrame(() => {
-      const rows = collectPageAudioSentences(contentRef.current, nextPage, stride);
+      const alreadyQueued = new Set([
+        ...completedAudioSentenceIdsRef.current,
+        ...audioQueue.map((row) => row.id),
+      ]);
+      const rows = collectPageAudioSentences(contentRef.current, nextPage, stride, alreadyQueued);
       if (rows.length === 0) return;
       prefetchedPageRef.current = nextPage;
       void Promise.all(rows.slice(0, 2).map((row) => prepareReaderAudio(row).catch(() => undefined)));
