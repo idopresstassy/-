@@ -176,41 +176,7 @@ export default function Reader() {
   const [audioActiveSentenceId, setAudioActiveSentenceId] = useState<number | null>(null);
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
 
-  // Keep the device screen awake only while narration is playing.
-  useEffect(() => {
-    if (!isAudioPlaying) return;
-    const wakeLockApi = (navigator as Navigator & {
-      wakeLock?: { request: (type: "screen") => Promise<{ release: () => Promise<void> }> };
-    }).wakeLock;
-    if (!wakeLockApi) return;
 
-    let activeLock: { release: () => Promise<void> } | null = null;
-    let cancelled = false;
-    const requestScreenLock = async () => {
-      if (cancelled || document.visibilityState !== "visible" || activeLock) return;
-      try {
-        const lock = await wakeLockApi.request("screen");
-        if (cancelled) {
-          void lock.release();
-          return;
-        }
-        activeLock = lock;
-      } catch {
-        // Unsupported or denied by the browser; narration should continue normally.
-      }
-    };
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") void requestScreenLock();
-    };
-
-    void requestScreenLock();
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => {
-      cancelled = true;
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      if (activeLock) void activeLock.release();
-    };
-  }, [isAudioPlaying]);
   const [isAudioLoading, setIsAudioLoading] = useState(false);
   const [audioSpeed, setAudioSpeed] = useState(0.8);
   const [audioUsesBrowserVoice, setAudioUsesBrowserVoice] = useState(false);
