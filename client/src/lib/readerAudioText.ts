@@ -226,7 +226,7 @@ export function collectPageAudioSentences(
         .filter((part) => part.spokenText.length > 0);
       const totalCharacters = visibleParts.reduce((sum, part) => sum + part.spokenText.length, 0);
       let elapsedCharacters = visibleParts[0]?.spokenText.length ?? 0;
-      const pageTransitions = visibleParts.slice(1).map((part, index) => {
+      const pageTransitions = visibleParts.slice(1).map((part) => {
         const transition = {
           pageIndex: part.pageIndex,
           progress: totalCharacters > 0 ? Math.min(1, elapsedCharacters / totalCharacters) : 1,
