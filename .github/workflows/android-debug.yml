@@ -7,6 +7,12 @@ on:
       - "android-app/**"
       - "client/src/pages/Reader.tsx"
       - ".github/workflows/android-debug.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "android-app/**"
+      - "client/src/pages/Reader.tsx"
+      - ".github/workflows/android-debug.yml"
   workflow_dispatch:
 
 jobs:
