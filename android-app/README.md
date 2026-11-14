@@ -4,9 +4,9 @@ This Android shell opens the existing library website and exposes a native Media
 
 ## Current state
 
-- Android project scaffold and Media3 service are present.
-- The Reader web UI still needs the native bridge integration and device testing before this app can be used for continuous book playback.
-- This project is a test build, not a Play Store release. A signed release and Android device test are still required.
+- The Reader now sends each generated Google TTS clip to the native foreground media service when it runs inside this app.
+- When a clip ends, the service notifies the reader so it can continue with the next clip while the display is locked.
+- This project is a test build, not a Play Store release. A signed release and physical Android device test are still required.
 
 ## Build
 
