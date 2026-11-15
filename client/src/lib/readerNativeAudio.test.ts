@@ -13,7 +13,7 @@ function setup() {
   const bridge = { postMessage: vi.fn() };
   const rows = [row(0, 0), row(1, 0), row(2, 1), row(3, 2)];
   const options = { bookId: 90003, title: () => "돈", allRows: () => rows,
-    onCursor: vi.fn(), onProgress: vi.fn(), onState: vi.fn() };
+    onCursor: vi.fn(), onProgress: vi.fn(), onState: vi.fn(), onSpeed: vi.fn() };
   const player = new NativeReaderAudioPlayback(bridge, options);
   const snapshot = (overrides: Partial<NativeNarrationSnapshot> = {}) => {
     const detail = { bookId: 90003, sentenceId: 2, index: 1, positionMs: 4, durationMs: 10,
@@ -51,8 +51,9 @@ describe("native narration handover", () => {
     const s = setup();
     s.snapshot({ bookId: 1 });
     expect(s.player.cursor).toBeNull();
-    s.snapshot();
+    s.snapshot({ speed: 1.2 });
     expect(s.player.playing).toBe(true);
+    expect(s.options.onSpeed).toHaveBeenLastCalledWith(1.2);
     expect(s.player.cursor?.batch.rows[0].id).toBe(2);
     s.document.dispatchEvent(new Event("visibilitychange"));
     expect(JSON.parse(s.bridge.postMessage.mock.lastCall![0]).action).toBe("state");

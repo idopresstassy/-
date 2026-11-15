@@ -9,6 +9,7 @@ export function nativeNarrationBridge(): NativeBridge | null {
 export type NativeNarrationSnapshot = {
   bookId: number; sentenceId: number; index: number; positionMs: number; durationMs: number;
   playing: boolean; loading: boolean; finished: boolean; deviceVoice: boolean; error: string | null;
+  speed?: number;
 };
 type NativeOptions = {
   bookId: number;
@@ -17,6 +18,7 @@ type NativeOptions = {
   onCursor(batch: ReaderAudioBatch, index: number): void;
   onProgress(row: ReaderAudioSentence, progress: number): void;
   onState(state: ReaderAudioPlaybackState): void;
+  onSpeed?(speed: number): void;
 };
 
 /** Service owns text, fetching and the queue. Web events only update the visible reader. */
@@ -64,6 +66,10 @@ export class NativeReaderAudioPlayback {
     if (!this.rows.length) this.rows = this.options.allRows();
     const row = this.rows.find((item) => item.id === state.sentenceId);
     if (!row) return;
+    if (typeof state.speed === "number" && Number.isFinite(state.speed) && state.speed >= 0.8 && state.speed <= 1.5) {
+      this.speed = Math.round(state.speed * 10) / 10;
+      this.options.onSpeed?.(this.speed);
+    }
     if (this.current?.rows[0]?.id !== row.id) {
       this.current = { page: row.pageNumber - 1, rows: [row] };
       this.options.onCursor(this.current, 0);

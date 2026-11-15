@@ -557,6 +557,7 @@ export default function Reader() {
       onCursor: playbackOptions.onCursor,
       onProgress: playbackOptions.onProgress,
       onState: playbackOptions.onState,
+      onSpeed: setAudioSpeed,
     }) : new ReaderAudioPlayback(playbackOptions);
     player.setSpeed(audioRuntimeRef.current.audioSpeed);
     audioPlayerRef.current = player;
