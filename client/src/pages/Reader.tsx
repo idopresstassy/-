@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import { useOfflineCache } from "@/hooks/useOfflineCache";
 import { cleanReaderAudioText, collectPageAudioSentences, splitReaderParagraph, type ReaderAudioSentence } from "@/lib/readerAudioText";
+import { scheduleReaderAudioPreparation } from "@/lib/readerAudioScheduling";
 
 type Theme = "light" | "dark" | "sepia" | "eink";
 
@@ -629,25 +630,18 @@ export default function Reader() {
   // Prepare the page queue from the same paragraph spans rendered by the reader.
   useEffect(() => {
     if (!audioRequest || audioRequest.page !== currentPage || stride <= 0 || !isReady) return;
-    let cancelled = false;
-    let firstFrame = 0;
-    let secondFrame = 0;
-    firstFrame = requestAnimationFrame(() => {
-      secondFrame = requestAnimationFrame(() => {
-        if (cancelled) return;
-        const rows = collectPageAudioSentences(contentRef.current, audioRequest.page, stride, completedAudioSentenceIdsRef.current);
-        const found = audioRequest.sentenceId === null ? 0 : rows.findIndex((row) => row.id === audioRequest.sentenceId);
-        const index = audioRequest.sentenceId === -1 ? Math.max(0, rows.length - 1) : Math.max(0, found);
-        setAudioQueue(rows);
-        setAudioPage(audioRequest.page);
-        setAudioIndex(index);
-        setAudioActiveSentenceId(rows[index]?.id ?? null);
-        setAudioRequest(null);
-        setIsAudioPlaying(rows.length > 0);
-        if (rows.length === 0) setIsAudioLoading(false);
-      });
+    return scheduleReaderAudioPreparation(() => {
+      const rows = collectPageAudioSentences(contentRef.current, audioRequest.page, stride, completedAudioSentenceIdsRef.current);
+      const found = audioRequest.sentenceId === null ? 0 : rows.findIndex((row) => row.id === audioRequest.sentenceId);
+      const index = audioRequest.sentenceId === -1 ? Math.max(0, rows.length - 1) : Math.max(0, found);
+      setAudioQueue(rows);
+      setAudioPage(audioRequest.page);
+      setAudioIndex(index);
+      setAudioActiveSentenceId(rows[index]?.id ?? null);
+      setAudioRequest(null);
+      setIsAudioPlaying(rows.length > 0);
+      if (rows.length === 0) setIsAudioLoading(false);
     });
-    return () => { cancelled = true; cancelAnimationFrame(firstFrame); cancelAnimationFrame(secondFrame); };
   }, [audioRequest, currentPage, stride, isReady]);
 
   const advanceAudio = useCallback(() => {
@@ -786,7 +780,7 @@ export default function Reader() {
     if (!isAudioPlaying || audioQueue.length === 0 || audioPage + 1 >= totalPages || stride <= 0) return;
     const nextPage = audioPage + 1;
     if (prefetchedPageRef.current === nextPage) return;
-    const frame = requestAnimationFrame(() => {
+    return scheduleReaderAudioPreparation(() => {
       const alreadyQueued = new Set([
         ...completedAudioSentenceIdsRef.current,
         ...audioQueue.map((row) => row.id),
@@ -797,7 +791,6 @@ export default function Reader() {
       prefetchedPageRowsRef.current = { page: nextPage, rows };
       void Promise.all(rows.slice(0, 2).map((row) => prepareReaderAudio(row).catch(() => undefined)));
     });
-    return () => cancelAnimationFrame(frame);
   }, [isAudioPlaying, audioQueue.length, audioPage, totalPages, stride, prepareReaderAudio]);
 
   useEffect(() => {
