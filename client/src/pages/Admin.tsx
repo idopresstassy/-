@@ -8,7 +8,7 @@ import { CREATIVE_GENRES, CREATIVE_GENRE_LABELS, type CreativeGenre } from "@sha
 import { toast } from "sonner";
 import { useState, useRef, useMemo } from "react";
 import { useLocation } from "wouter";
-import { ChevronLeft, Plus, Trash2, Edit, Save, X, Upload, Loader2, Users, BarChart3, BookOpen, Mail, Send, Calendar, TrendingUp, PenLine, Check, Ban, Mic } from "lucide-react";
+import { ChevronLeft, Plus, Trash2, Edit, Save, X, Upload, Loader2, Users, BarChart3, BookOpen, Mail, Send, Calendar, TrendingUp, PenLine, Check, Ban, Mic, Search } from "lucide-react";
 import { Line, LineChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 
@@ -409,6 +409,14 @@ function BooksTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> }) {
   const [editingBook, setEditingBook] = useState<number | null>(null);
   const [bookForm, setBookForm] = useState({ title: "", author: "", genre: "classic" as "classic" | "modern" | "foreign" | "creative", creativeGenre: "other" as CreativeGenre, content: "", description: "", youtubeUrl: "", googleDriveUrl: "", webtoonUrl: "" });
   const [showAddBook, setShowAddBook] = useState(false);
+  const [bookSearch, setBookSearch] = useState("");
+  const filteredBooks = useMemo(() => {
+    const query = bookSearch.trim().toLocaleLowerCase();
+    if (!query) return books ?? [];
+    return (books ?? []).filter((book) =>
+      book.title.toLocaleLowerCase().includes(query) || book.author.toLocaleLowerCase().includes(query)
+    );
+  }, [books, bookSearch]);
 
   // 파일 업로드 관련 상태
   const [uploading, setUploading] = useState(false);
@@ -563,6 +571,18 @@ function BooksTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> }) {
           </Button>
         </div>
 
+        <div className="relative mb-4">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />
+          <Input
+            type="search"
+            value={bookSearch}
+            onChange={(e) => setBookSearch(e.target.value)}
+            placeholder="책 제목 또는 작가 이름으로 검색"
+            aria-label="책 제목 또는 작가 이름으로 도서 검색"
+            className="pl-9"
+          />
+        </div>
+
         {showAddBook && (
           <div className="border border-border rounded p-4 mb-4 bg-secondary/30 space-y-3">
             <h3 className="font-medium">새 도서 수동 추가</h3>
@@ -592,9 +612,9 @@ function BooksTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> }) {
 
         {booksLoading ? (
           <div className="animate-pulse text-muted-foreground">로딩 중...</div>
-        ) : books && books.length > 0 ? (
+        ) : books && books.length > 0 && filteredBooks.length > 0 ? (
           <div className="space-y-3">
-            {books.map((book) => (
+            {filteredBooks.map((book) => (
               <div key={book.id} className="border border-border rounded p-4">
                 {editingBook === book.id ? (
                   <div className="space-y-3">
@@ -639,7 +659,9 @@ function BooksTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> }) {
             ))}
           </div>
         ) : (
-          <p className="text-muted-foreground text-center py-8">등록된 도서가 없습니다.</p>
+          <p className="text-muted-foreground text-center py-8">
+            {books && books.length > 0 ? "제목이나 작가가 일치하는 도서가 없습니다." : "등록된 도서가 없습니다."}
+          </p>
         )}
       </section>
     </div>
