@@ -5,9 +5,10 @@ import { trpc } from "@/lib/trpc";
 import { booksQueryOptions, getBookCountLabel, shouldShowEmptyBooks } from "@/lib/booksQueryPolicy";
 import { getSupabaseLoginRoute } from "@/lib/authNavigation";
 import { BRAND_LOGO_URL } from "@/lib/brand";
+import { readCatalogState, saveCatalogState } from "@/lib/catalogState";
 import { WEBTOON_SITE_URL } from "@/lib/externalLinks";
 import { CREATIVE_GENRES, CREATIVE_GENRE_LABELS, type CreativeGenre } from "@shared/creative";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { BookOpen, Heart, Search, Youtube, LogIn, LogOut, Settings, List, X, Library, BookImage, Palette, PenLine } from "lucide-react";
 
@@ -22,10 +23,14 @@ const GENRES = [
 export default function Home() {
   const { user, isAuthenticated, logout } = useAuth();
   const [, navigate] = useLocation();
-  const [genre, setGenre] = useState<"classic" | "modern" | "foreign" | "creative" | undefined>(() => new URLSearchParams(window.location.search).get("genre") === "creative" ? "creative" : undefined);
-  const [creativeGenre, setCreativeGenre] = useState<CreativeGenre | undefined>(undefined);
-  const [search, setSearch] = useState("");
-  const [searchInput, setSearchInput] = useState("");
+  const [initialCatalog] = useState(() => readCatalogState(window.location.search));
+  const [genre, setGenre] = useState(initialCatalog.genre);
+  const [creativeGenre, setCreativeGenre] = useState(initialCatalog.creativeGenre);
+  const [search, setSearch] = useState(initialCatalog.search);
+  const [searchInput, setSearchInput] = useState(initialCatalog.searchInput);
+  useEffect(() => {
+    saveCatalogState({ genre, creativeGenre, search, searchInput });
+  }, [genre, creativeGenre, search, searchInput]);
   const [showDonation, setShowDonation] = useState(false);
   const [showBookList, setShowBookList] = useState(false);
 
