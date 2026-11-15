@@ -1,6 +1,5 @@
 package com.myeongjak.library
 
-import android.content.Context
 import android.net.Uri
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.ResolvingDataSource
@@ -17,6 +16,8 @@ class CloudNarrationResolver(
   private val deviceVoices: MutableSet<Int>
 ) : ResolvingDataSource.Resolver {
   private val urls = ConcurrentHashMap<Int, Pair<Long, Uri>>()
+
+  fun invalidate() { urls.clear() }
 
   override fun resolveDataSpec(dataSpec: DataSpec): DataSpec {
     val index = dataSpec.uri.lastPathSegment?.toIntOrNull() ?: throw IOException("Invalid audio index")
@@ -55,7 +56,7 @@ class CloudNarrationResolver(
       connection.doOutput = true
       connection.setRequestProperty("Content-Type", "application/json")
       connection.outputStream.use { it.write(JSONObject().put("json", input).toString().toByteArray(Charsets.UTF_8)) }
-      if (connection.responseCode !in 200..299) throw IOException("음성 서버 연결을 다시 시도합니다 (${connection.responseCode}).")
+      if (connection.responseCode !in 200..299) throw NarrationRequestException(connection.responseCode)
       val body = connection.inputStream.bufferedReader().use { it.readText() }
       return JSONObject(body).getJSONObject("result").getJSONObject("data").getJSONObject("json")
     } finally { connection.disconnect() }

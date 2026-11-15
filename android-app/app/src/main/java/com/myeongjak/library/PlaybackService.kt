@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -34,6 +35,11 @@ class PlaybackService : MediaSessionService() {
   private var sourceFactory: ProgressiveMediaSource.Factory? = null
   private var appended = 0
   private var error: String? = null
+  private var resolver: ResolvingDataSource.Resolver? = null
+  private var retryTask: Runnable? = null
+  private var retryCount = 0
+  private var lastErrorCode: Int? = null
+  private var lastStopReason: Int? = null
   private val deviceVoices = ConcurrentHashMap.newKeySet<Int>()
   private val handler = Handler(Looper.getMainLooper())
   private val ticker = object : Runnable {
@@ -59,9 +65,35 @@ class PlaybackService : MediaSessionService() {
             publish()
           }
           override fun onPlaybackStateChanged(state: Int) { publish() }
-          override fun onIsPlayingChanged(isPlaying: Boolean) { publish() }
+          override fun onIsPlayingChanged(isPlaying: Boolean) {
+            if (isPlaying) {
+              cancelRecovery()
+              retryCount = 0
+              error = null
+            }
+            publish()
+          }
+          override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            if (!playWhenReady) {
+              cancelRecovery()
+              lastStopReason = reason
+              if (reason == Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_FOCUS_LOSS) {
+                error = "통화나 다른 앱의 소리 때문에 낭독이 일시정지됐습니다."
+              } else if (reason == Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_BECOMING_NOISY) {
+                error = "이어폰 연결이 해제되어 낭독이 일시정지됐습니다."
+              }
+              Log.i("Narration", "paused reason=$reason index=${player.currentMediaItemIndex}")
+            }
+            publish()
+          }
           override fun onPlayerError(playbackError: PlaybackException) {
-            error = "음성을 불러오지 못했습니다. 인터넷 연결을 확인하고 재생을 눌러 주세요."
+            lastErrorCode = playbackError.errorCode
+            Log.w("Narration", "load_failed code=${playbackError.errorCode} index=${player.currentMediaItemIndex}")
+            if (player.playWhenReady && PlaybackRecovery.canRetry(playbackError)) {
+              scheduleRecovery()
+            } else {
+              error = "음성을 재생하지 못했습니다 (오류 ${playbackError.errorCode}). 재생을 눌러 다시 시도해 주세요."
+            }
             publish()
           }
         })
@@ -77,6 +109,10 @@ class PlaybackService : MediaSessionService() {
     val result = super.onStartCommand(intent, flags, startId)
     when (intent?.action) {
       START -> {
+        cancelRecovery()
+        retryCount = 0
+        lastErrorCode = null
+        lastStopReason = null
         // Show a media notification before a slow first synthesis can exceed the foreground deadline.
         startForeground(NOTIFICATION, Notification.Builder(this, CHANNEL)
           .setSmallIcon(android.R.drawable.ic_media_play).setContentTitle("명작무료책방")
@@ -90,16 +126,20 @@ class PlaybackService : MediaSessionService() {
         error = null
         deviceVoices.clear()
         val http = DefaultHttpDataSource.Factory().setConnectTimeoutMs(15000).setReadTimeoutMs(30000)
-        val data = ResolvingDataSource.Factory(DefaultDataSource.Factory(this, http), AudioResolverFactory.create(next, speech, deviceVoices))
+        resolver = AudioResolverFactory.create(next, speech, deviceVoices)
+        val data = ResolvingDataSource.Factory(DefaultDataSource.Factory(this, http), resolver!!)
         sourceFactory = ProgressiveMediaSource.Factory(data)
         appendUpcoming()
         player.setPlaybackSpeed(next.speed)
         player.prepare()
         player.play()
       }
-      "pause" -> player.pause()
+      "pause" -> { cancelRecovery(); error = null; player.pause() }
       "resume" -> {
+        cancelRecovery()
+        retryCount = 0
         error = null
+        (resolver as? CloudNarrationResolver)?.invalidate()
         if (player.playerError != null) player.prepare()
         player.play()
       }
@@ -109,6 +149,31 @@ class PlaybackService : MediaSessionService() {
     }
     publish()
     return result
+  }
+
+  private fun cancelRecovery() {
+    retryTask?.let { handler.removeCallbacks(it) }
+    retryTask = null
+  }
+
+  private fun scheduleRecovery() {
+    cancelRecovery()
+    retryCount++
+    error = "음성 연결이 잠시 끊겨 자동으로 다시 연결하고 있습니다."
+    (resolver as? CloudNarrationResolver)?.invalidate()
+    val expectedQueue = queue
+    val retry = Runnable {
+      retryTask = null
+      // A pause, headset disconnect, new book, or audio-focus loss cancels retry.
+      if (!player.playWhenReady || queue !== expectedQueue || player.playbackState == Player.STATE_ENDED) return@Runnable
+      Log.i("Narration", "retry attempt=$retryCount index=${player.currentMediaItemIndex}")
+      // prepare retains the current item/position and playWhenReady. Do not seek
+      // or call play(): that would override the reader's pause or repeat text.
+      player.prepare()
+      publish()
+    }
+    retryTask = retry
+    handler.postDelayed(retry, PlaybackRecovery.delayMs(retryCount))
   }
 
   private fun appendUpcoming() {
@@ -135,13 +200,17 @@ class PlaybackService : MediaSessionService() {
     val row = book.rows[index]
     val duration = player.duration.takeIf { it != C.TIME_UNSET && it > 0 } ?: 0
     NarrationState.publish(JSONObject().put("bookId", book.bookId).put("sentenceId", row.id)
-      .put("index", index).put("positionMs", player.currentPosition).put("durationMs", duration)
-      .put("speed", player.playbackParameters.speed).put("playing", player.playWhenReady && player.playbackState != Player.STATE_ENDED && error == null)
-      .put("loading", player.playbackState == Player.STATE_BUFFERING).put("finished", player.playbackState == Player.STATE_ENDED)
+      .put("index", index).put("pageNumber", row.pageNumber).put("queueLength", book.rows.size)
+      .put("positionMs", player.currentPosition).put("durationMs", duration)
+      .put("speed", player.playbackParameters.speed).put("playing", player.playWhenReady && player.playbackState != Player.STATE_ENDED && (error == null || retryTask != null || player.playbackState == Player.STATE_BUFFERING))
+      .put("loading", retryTask != null || player.playbackState == Player.STATE_BUFFERING).put("finished", player.playbackState == Player.STATE_ENDED)
+      .put("recoveryAttempt", retryCount).put("lastErrorCode", lastErrorCode ?: JSONObject.NULL)
+      .put("lastStopReason", lastStopReason ?: JSONObject.NULL)
       .put("deviceVoice", deviceVoices.contains(index)).put("error", error ?: JSONObject.NULL))
   }
 
   override fun onDestroy() {
+    cancelRecovery()
     handler.removeCallbacksAndMessages(null)
     mediaSession?.release()
     player.release()
