@@ -261,3 +261,32 @@ export function collectPageAudioSentences(
   }
   return rows;
 }
+
+/** Snapshot text/layout once for a native queue; this does not request or generate audio. */
+export function collectBookAudioSentences(root: HTMLElement | null, stride: number): ReaderAudioSentence[] {
+  if (!root || stride <= 0) return [];
+  const rootLeft = root.getBoundingClientRect().left;
+  const counts = new Map<number, number>();
+  const rows: ReaderAudioSentence[] = [];
+  for (const span of Array.from(root.querySelectorAll<HTMLElement>("[data-audio-sentence-id]"))) {
+    if (!span.closest<HTMLElement>("[data-line-index]")) continue;
+    const parts = [...getSpokenTextByPage(span, rootLeft, stride).entries()]
+      .sort(([a], [b]) => a - b).map(([page, text]) => ({ page, text, spoken: cleanReaderAudioText(text) }))
+      .filter((part) => part.spoken.length);
+    const page = parts[0]?.page ?? Math.floor(Math.max(0, span.getBoundingClientRect().left - rootLeft) / stride);
+    const text = parts.length ? cleanReaderAudioText(parts.map((part) => part.text).join(""))
+      : span.dataset.audioText ?? cleanReaderAudioText(span.textContent ?? "");
+    if (!text) continue;
+    const total = parts.reduce((sum, part) => sum + part.spoken.length, 0);
+    let elapsed = parts[0]?.spoken.length ?? 0;
+    const pageTransitions = parts.length ? parts.slice(1).map((part) => {
+      const transition = { pageIndex: part.page, progress: elapsed / total };
+      elapsed += part.spoken.length;
+      return transition;
+    }) : measureParagraphPageTransitions(span, rootLeft, stride);
+    const sentenceNumber = counts.get(page) ?? 0;
+    counts.set(page, sentenceNumber + 1);
+    rows.push({ id: Number(span.dataset.audioSentenceId), text, pageNumber: page + 1, sentenceNumber, pageTransitions });
+  }
+  return rows;
+}

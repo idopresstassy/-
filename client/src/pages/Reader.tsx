@@ -34,10 +34,11 @@ import {
   SkipForward,
 } from "lucide-react";
 import { useOfflineCache } from "@/hooks/useOfflineCache";
-import { cleanReaderAudioText, collectPageAudioSentences, splitReaderParagraph, type ReaderAudioSentence } from "@/lib/readerAudioText";
+import { cleanReaderAudioText, collectPageAudioSentences, collectBookAudioSentences, splitReaderParagraph, type ReaderAudioSentence } from "@/lib/readerAudioText";
 import { scheduleReaderAudioPreparation } from "@/lib/readerAudioScheduling";
 import { ReaderAudioPlayback, type ReaderAudioBatch } from "@/lib/readerAudioPlayback";
 import { speakReaderText } from "@/lib/readerBrowserSpeech";
+import { NativeReaderAudioPlayback, nativeNarrationBridge } from "@/lib/readerNativeAudio";
 
 type Theme = "light" | "dark" | "sepia" | "eink";
 
@@ -181,7 +182,7 @@ export default function Reader() {
   const [audioSpeed, setAudioSpeed] = useState(0.8);
   const [audioUsesBrowserVoice, setAudioUsesBrowserVoice] = useState(false);
   const audioElementRef = useRef<HTMLAudioElement>(null);
-  const audioPlayerRef = useRef<ReaderAudioPlayback | null>(null);
+  const audioPlayerRef = useRef<ReaderAudioPlayback | NativeReaderAudioPlayback | null>(null);
   const [audioPlaybackError, setAudioPlaybackError] = useState<string | null>(null);
   const audioProgressKey = `reader_audio_progress_${bookId}`;
   const audioMutation = trpc.readerAudio.getOrCreate.useMutation();
@@ -494,15 +495,15 @@ export default function Reader() {
 
   // The controller reads current layout/configuration through refs, but never
   // waits for a React render to advance the media queue.
-  const audioRuntimeRef = useRef({ totalPages, stride, audioSpeed, audioProgressKey,
+  const audioRuntimeRef = useRef({ bookId, totalPages, stride, audioSpeed, audioProgressKey,
     title: book?.title ?? "도서 낭독", requestReaderAudio, prepareReaderAudio });
-  audioRuntimeRef.current = { totalPages, stride, audioSpeed, audioProgressKey,
+  audioRuntimeRef.current = { bookId, totalPages, stride, audioSpeed, audioProgressKey,
     title: book?.title ?? "도서 낭독", requestReaderAudio, prepareReaderAudio };
 
   const getAudioPlayer = useCallback(() => {
     if (audioPlayerRef.current) return audioPlayerRef.current;
     if (!audioElementRef.current) return null;
-    const player = new ReaderAudioPlayback({
+    const playbackOptions: ConstructorParameters<typeof ReaderAudioPlayback>[0] = {
       audio: audioElementRef.current,
       request: (row) => audioRuntimeRef.current.requestReaderAudio(row),
       preload: (row) => audioRuntimeRef.current.prepareReaderAudio(row),
@@ -528,7 +529,7 @@ export default function Reader() {
           localStorage.setItem(audioRuntimeRef.current.audioProgressKey,
             JSON.stringify({ page: batch.page, sentenceId: row.id }));
         } catch { /* Storage can be disabled; narration must continue. */ }
-        if ("mediaSession" in navigator && "MediaMetadata" in window) {
+        if (!nativeNarrationBridge() && "mediaSession" in navigator && "MediaMetadata" in window) {
           navigator.mediaSession.metadata = new MediaMetadata({
             title: audioRuntimeRef.current.title, artist: "명작무료책방", album: "오디오 낭독",
           });
@@ -545,13 +546,26 @@ export default function Reader() {
         setAudioPlaybackError(state.error);
         if (!state.playing && !audioPlayerRef.current?.cursor) setAudioActiveSentenceId(null);
         // Keep the OS session active while the next MP3 is loading, too.
-        if ("mediaSession" in navigator) navigator.mediaSession.playbackState = state.playing ? "playing" : "paused";
+        if (!nativeNarrationBridge() && "mediaSession" in navigator) navigator.mediaSession.playbackState = state.playing ? "playing" : "paused";
       },
-    });
+    };
+    const bridge = nativeNarrationBridge();
+    const player = bridge ? new NativeReaderAudioPlayback(bridge, {
+      bookId: audioRuntimeRef.current.bookId,
+      title: () => audioRuntimeRef.current.title,
+      allRows: () => collectBookAudioSentences(contentRef.current, audioRuntimeRef.current.stride),
+      onCursor: playbackOptions.onCursor,
+      onProgress: playbackOptions.onProgress,
+      onState: playbackOptions.onState,
+    }) : new ReaderAudioPlayback(playbackOptions);
     player.setSpeed(audioRuntimeRef.current.audioSpeed);
     audioPlayerRef.current = player;
     return player;
   }, []);
+
+  useEffect(() => {
+    if (nativeNarrationBridge() && isReady && stride > 0) getAudioPlayer();
+  }, [isReady, stride, bookId, getAudioPlayer]);
 
   const requestAudioPage = useCallback((page: number, sentenceId: number | null = null) => {
     const safePage = Math.max(0, Math.min(page, totalPages - 1));
@@ -615,7 +629,7 @@ export default function Reader() {
   };
 
   useEffect(() => {
-    if (!("mediaSession" in navigator) || !navigator.mediaSession) return;
+    if (nativeNarrationBridge() || !("mediaSession" in navigator) || !navigator.mediaSession) return;
     const session = navigator.mediaSession;
     const setHandler = (action: MediaSessionAction, handler: MediaSessionActionHandler | null) => {
       try { session.setActionHandler(action, handler); } catch { /* Ignore unsupported media actions. */ }
@@ -1081,7 +1095,8 @@ export default function Reader() {
                     {[0.8, 1, 1.2, 1.5].map((speed) => <option key={speed} value={speed}>{speed.toFixed(1)}배</option>)}
                   </select>
                 </label>
-                {audioUsesBrowserVoice && <p className="mt-2 text-xs text-muted-foreground">브라우저 기본 음성 사용 중</p>}
+                {audioUsesBrowserVoice && <p className="mt-2 text-xs text-muted-foreground">{nativeNarrationBridge() ? "기기 기본 음성 사용 중" : "브라우저 기본 음성 사용 중"}</p>}
+                {nativeNarrationBridge() && !audioUsesBrowserVoice && <p className="mt-2 text-xs text-muted-foreground">앱에서 연속 낭독 중 · 화면을 꺼도 이어듣기</p>}
                 {audioPlaybackError && <p role="status" className="mt-2 text-xs text-amber-700">{audioPlaybackError}</p>}
               </div>
 
