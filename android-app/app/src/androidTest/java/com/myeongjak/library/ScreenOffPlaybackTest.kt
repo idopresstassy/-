@@ -55,7 +55,7 @@ class ScreenOffPlaybackTest {
       val index = spec.uri.lastPathSegment!!.toInt()
       requested.add(index)
       if (injectFailures && index == 24 && failures.getAndIncrement() < 8) {
-        throw HttpDataSource.InvalidResponseCodeException(503, "temporary outage", emptyMap(), spec, ByteArray(0))
+        throw HttpDataSource.InvalidResponseCodeException(503, "temporary outage", null, emptyMap(), spec, ByteArray(0))
       }
       if (index == 60 && missingFile.compareAndSet(true, false)) throw FileNotFoundException("temporary clip removed")
       spec.withUri(Uri.fromFile(file))
