@@ -2,12 +2,17 @@ package com.myeongjak.library
 
 import android.app.Activity
 import android.content.Intent
+import android.graphics.Color
 import android.os.Bundle
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
+import android.widget.FrameLayout
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import org.json.JSONObject
@@ -21,6 +26,9 @@ class MainActivity : Activity() {
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+    WindowCompat.setDecorFitsSystemWindows(window, false)
+    window.statusBarColor = Color.TRANSPARENT
+    window.navigationBarColor = Color.TRANSPARENT
     webView = WebView(this).apply {
       settings.javaScriptEnabled = true
       settings.domStorageEnabled = true
@@ -50,7 +58,22 @@ class MainActivity : Activity() {
       Toast.makeText(this, "Android System WebView를 업데이트한 뒤 다시 열어 주세요.", Toast.LENGTH_LONG).show()
     }
     NarrationState.subscribe(observer)
-    setContentView(webView)
+    val container = FrameLayout(this).apply {
+      setBackgroundColor(Color.WHITE)
+      addView(webView, FrameLayout.LayoutParams(-1, -1))
+    }
+    ViewCompat.setOnApplyWindowInsetsListener(container) { view, insets ->
+      val safe = insets.getInsets(WindowInsetsCompat.Type.systemBars() or
+        WindowInsetsCompat.Type.displayCutout() or WindowInsetsCompat.Type.ime())
+      view.setPadding(safe.left, safe.top, safe.right, safe.bottom)
+      insets
+    }
+    setContentView(container)
+    WindowCompat.getInsetsController(window, container).apply {
+      isAppearanceLightStatusBars = true
+      isAppearanceLightNavigationBars = true
+    }
+    ViewCompat.requestApplyInsets(container)
     webView.loadUrl("https://korealib.com")
   }
 

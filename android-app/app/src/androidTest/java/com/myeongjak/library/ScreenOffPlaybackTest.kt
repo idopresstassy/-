@@ -4,7 +4,8 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.PowerManager
-import androidx.core.content.ContextCompat
+import android.view.ViewGroup
+import android.webkit.WebView
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
@@ -12,6 +13,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
 import org.json.JSONObject
+import org.json.JSONArray
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -43,10 +45,17 @@ class ScreenOffPlaybackTest {
     val scenario = ActivityScenario.launch(MainActivity::class.java)
     try {
       scenario.onActivity { activity ->
-        val queue = NarrationQueue(90003, "화면 꺼짐 연속 낭독 시험", 1f,
-          (0..5).map { NarrationRow(it, "시험 문단 $it", it / 2 + 1, it % 2) })
-        ContextCompat.startForegroundService(activity, Intent(activity, PlaybackService::class.java)
-          .setAction(PlaybackService.START).putExtra("token", PendingNarration.put(queue)))
+        val payload = JSONObject().put("action", "start").put("bookId", 90003)
+          .put("title", "화면 꺼짐 연속 낭독 시험").put("speed", 1)
+          .put("rows", JSONArray((0..5).map { JSONObject().put("id", it)
+            .put("text", "시험 문단 $it").put("pageNumber", it / 2 + 1).put("sentenceNumber", it % 2) }))
+        val container = activity.findViewById<ViewGroup>(android.R.id.content).getChildAt(0) as ViewGroup
+        val webView = container.getChildAt(0) as WebView
+        // Exercise the same origin-scoped WebMessage bridge used by the reader,
+        // then remove the entire web runtime once the native queue starts.
+        webView.loadDataWithBaseURL("https://korealib.com/", "<html><body><script>" +
+          "window.MyeongjakAudioV2.postMessage(" + JSONObject.quote(payload.toString()) +
+          ");</script></body></html>", "text/html", "UTF-8", null)
       }
       awaitCondition(15000) { JSONObject(NarrationState.latest).optLong("positionMs") > 200 }
       device.sleep()

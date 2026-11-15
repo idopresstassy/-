@@ -23,7 +23,8 @@ gradle -p android-app testDebugUnitTest assembleDebug assembleDebugAndroidTest
 gradle -p android-app connectedDebugAndroidTest
 ```
 
-GitHub Actions runs six local two-second WAV clips through the real MediaSessionService,
+GitHub Actions sends a six-clip queue through the real origin-scoped WebView bridge,
+runs six local two-second WAV clips through the real MediaSessionService,
 locks the API 35 emulator and destroys the Activity/WebView. It asserts all six clips
 finish and later transitions occurred while the screen was off. The fixture does not use
 Google Cloud or consume narration quota. Test resolver injection is internal, debug-only,
