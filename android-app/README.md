@@ -1,4 +1,4 @@
-# 명작무료책방 Android 낭독 시험판 0.2.0
+# 명작무료책방 Android 낭독 시험판 0.2.1
 
 ## What changed
 
@@ -43,3 +43,20 @@ release, and real Galaxy power/network conditions still need device confirmation
 
 The original draft PR #5 forwarded each clip's end back to the WebView. This implementation
 replaces that design; the old draft must not be merged alongside this version.
+
+## 0.2.1: recovery during a long book
+
+The service retries transient network/server/storage failures with delays capped at 15 seconds,
+refreshing signed audio URLs and preserving the current clip/position. User pauses, audio-focus
+loss, and headset disconnects cancel recovery. Decoder failures and rejected API requests remain
+visible errors. There is no page-count stop or whole-book audio generation.
+
+Regression coverage includes a 12-minute, 180-clip / 90-test-page queue with the screen locked and
+Activity destroyed. Repeated HTTP 503 responses are injected at clip 24 and a missing temporary
+file at clip 60. All clips must play, both failures must recover without a tap, and a separate
+pause test must prevent automatic restarts. Local generated WAV fixtures incur no cloud TTS cost.
+The short six-clip test is retained. Real Galaxy/network behavior still needs device confirmation.
+
+Test APKs use ephemeral CI debug signing. Updating an older test APK may require uninstalling
+that test app first; this clears local app data, not server books or membership. Store releases
+must use a retained release/upload signing key instead.
