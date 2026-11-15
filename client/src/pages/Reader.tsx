@@ -36,6 +36,8 @@ import {
 import { useOfflineCache } from "@/hooks/useOfflineCache";
 import { cleanReaderAudioText, collectPageAudioSentences, splitReaderParagraph, type ReaderAudioSentence } from "@/lib/readerAudioText";
 import { scheduleReaderAudioPreparation } from "@/lib/readerAudioScheduling";
+import { ReaderAudioPlayback, type ReaderAudioBatch } from "@/lib/readerAudioPlayback";
+import { speakReaderText } from "@/lib/readerBrowserSpeech";
 
 type Theme = "light" | "dark" | "sepia" | "eink";
 
@@ -170,9 +172,6 @@ export default function Reader() {
 
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
-  const [audioQueue, setAudioQueue] = useState<ReaderAudioSentence[]>([]);
-  const [audioIndex, setAudioIndex] = useState(0);
-  const [audioPage, setAudioPage] = useState(0);
   const [audioRequest, setAudioRequest] = useState<{ page: number; sentenceId: number | null; nonce: number } | null>(null);
   const [audioActiveSentenceId, setAudioActiveSentenceId] = useState<number | null>(null);
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
@@ -182,10 +181,8 @@ export default function Reader() {
   const [audioSpeed, setAudioSpeed] = useState(0.8);
   const [audioUsesBrowserVoice, setAudioUsesBrowserVoice] = useState(false);
   const audioElementRef = useRef<HTMLAudioElement>(null);
-  const audioPlayTokenRef = useRef(0);
-  const prefetchedPageRef = useRef<number | null>(null);
-  const completedAudioSentenceIdsRef = useRef(new Set<number>());
-  const prefetchedPageRowsRef = useRef<{ page: number; rows: ReaderAudioSentence[] } | null>(null);
+  const audioPlayerRef = useRef<ReaderAudioPlayback | null>(null);
+  const [audioPlaybackError, setAudioPlaybackError] = useState<string | null>(null);
   const audioProgressKey = `reader_audio_progress_${bookId}`;
   const audioMutation = trpc.readerAudio.getOrCreate.useMutation();
   const audioRequestCacheRef = useRef(new Map<string, ReturnType<typeof audioMutation.mutateAsync>>());
@@ -201,6 +198,10 @@ export default function Reader() {
         bookId, pageNumber: item.pageNumber, sentenceNumber: item.sentenceNumber, text: item.text,
       });
       cache.set(key, request);
+      // A temporary service error must be retried on the next listening attempt.
+      void request.then((result) => {
+        if (result.fallback && cache.get(key) === request) cache.delete(key);
+      }, () => { if (cache.get(key) === request) cache.delete(key); });
       while (cache.size > 20) {
         const oldestKey = cache.keys().next().value;
         if (!oldestKey || oldestKey === key) break;
@@ -491,17 +492,73 @@ export default function Reader() {
     setCurrentPage((prev) => (prev > 0 ? prev - 1 : prev));
   }, []);
 
-  const requestAudioPage = useCallback((page: number, sentenceId: number | null = null, continueAfterPage = false) => {
+  // The controller reads current layout/configuration through refs, but never
+  // waits for a React render to advance the media queue.
+  const audioRuntimeRef = useRef({ totalPages, stride, audioSpeed, audioProgressKey,
+    title: book?.title ?? "도서 낭독", requestReaderAudio, prepareReaderAudio });
+  audioRuntimeRef.current = { totalPages, stride, audioSpeed, audioProgressKey,
+    title: book?.title ?? "도서 낭독", requestReaderAudio, prepareReaderAudio };
+
+  const getAudioPlayer = useCallback(() => {
+    if (audioPlayerRef.current) return audioPlayerRef.current;
+    if (!audioElementRef.current) return null;
+    const player = new ReaderAudioPlayback({
+      audio: audioElementRef.current,
+      request: (row) => audioRuntimeRef.current.requestReaderAudio(row),
+      preload: (row) => audioRuntimeRef.current.prepareReaderAudio(row),
+      nextBatch: (batch: ReaderAudioBatch, excluded) => {
+        const { totalPages, stride } = audioRuntimeRef.current;
+        if (stride <= 0) return null;
+        const crossedPage = batch.rows.reduce((page, row) => Math.max(page,
+          row.pageTransitions.at(-1)?.pageIndex ?? page), batch.page);
+        // A paragraph can span multiple pages. Resume at its ending page,
+        // excluding it, so remaining paragraphs are neither skipped nor repeated.
+        for (let page = Math.max(batch.page + 1, crossedPage); page < totalPages; ++page) {
+          const rows = collectPageAudioSentences(contentRef.current, page, stride, excluded);
+          if (rows.length) return { page, rows };
+        }
+        return null;
+      },
+      speak: speakReaderText,
+      onCursor: (batch, index) => {
+        const row = batch.rows[index];
+        setAudioActiveSentenceId(row.id);
+        setCurrentPage(batch.page);
+        try {
+          localStorage.setItem(audioRuntimeRef.current.audioProgressKey,
+            JSON.stringify({ page: batch.page, sentenceId: row.id }));
+        } catch { /* Storage can be disabled; narration must continue. */ }
+        if ("mediaSession" in navigator && "MediaMetadata" in window) {
+          navigator.mediaSession.metadata = new MediaMetadata({
+            title: audioRuntimeRef.current.title, artist: "명작무료책방", album: "오디오 낭독",
+          });
+        }
+      },
+      onProgress: (row, progress) => {
+        const transition = row.pageTransitions.filter((entry) => progress >= entry.progress).at(-1);
+        if (transition) setCurrentPage((page) => Math.max(page, transition.pageIndex));
+      },
+      onState: (state) => {
+        setIsAudioPlaying(state.playing);
+        setIsAudioLoading(state.loading);
+        setAudioUsesBrowserVoice(state.browserVoice);
+        setAudioPlaybackError(state.error);
+        if (!state.playing && !audioPlayerRef.current?.cursor) setAudioActiveSentenceId(null);
+        // Keep the OS session active while the next MP3 is loading, too.
+        if ("mediaSession" in navigator) navigator.mediaSession.playbackState = state.playing ? "playing" : "paused";
+      },
+    });
+    player.setSpeed(audioRuntimeRef.current.audioSpeed);
+    audioPlayerRef.current = player;
+    return player;
+  }, []);
+
+  const requestAudioPage = useCallback((page: number, sentenceId: number | null = null) => {
     const safePage = Math.max(0, Math.min(page, totalPages - 1));
-    if (!continueAfterPage) {
-      completedAudioSentenceIdsRef.current.clear();
-      prefetchedPageRowsRef.current = null;
-      prefetchedPageRef.current = null;
-    }
+    audioPlayerRef.current?.pause();
     setReadMode("page");
     setCurrentPage(safePage);
-    setAudioQueue([]);
-    setAudioPage(safePage);
+    setAudioPlaybackError(null);
     setAudioRequest({ page: safePage, sentenceId, nonce: Date.now() });
   }, [totalPages]);
 
@@ -520,46 +577,27 @@ export default function Reader() {
   }, [readMode, requestAudioPage, stride, currentPage]);
 
   const pauseAudio = useCallback(() => {
-    setIsAudioPlaying(false);
-    setIsAudioLoading(false);
-    audioPlayTokenRef.current += 1;
-    audioElementRef.current?.pause();
-    window.speechSynthesis?.cancel();
+    setAudioRequest(null);
+    audioPlayerRef.current?.pause();
   }, []);
 
   const toggleAudioPlayback = useCallback(() => {
-    if (isAudioPlaying) {
-      pauseAudio();
-      return;
-    }
-    if (audioQueue.length > 0) {
-      setIsAudioPlaying(true);
-      return;
-    }
+    const player = getAudioPlayer();
+    if (player?.playing) { pauseAudio(); return; }
+    if (player?.cursor) { player.resume(); return; }
     let saved: { page?: number; sentenceId?: number } = {};
     try { saved = JSON.parse(localStorage.getItem(audioProgressKey) || "{}"); } catch { /* Start from the current page. */ }
     requestAudioPage(Number.isInteger(saved.page) ? Number(saved.page) : currentPage,
       Number.isInteger(saved.sentenceId) ? Number(saved.sentenceId) : null);
-  }, [isAudioPlaying, pauseAudio, audioQueue.length, audioProgressKey, requestAudioPage, currentPage]);
+  }, [getAudioPlayer, pauseAudio, audioProgressKey, requestAudioPage, currentPage]);
 
   const skipAudioSentence = useCallback((direction: -1 | 1) => {
-    if (audioQueue.length === 0) {
-      requestAudioPage(currentPage);
-      return;
-    }
-    const target = audioIndex + direction;
-    if (target >= 0 && target < audioQueue.length) {
-      setAudioIndex(target);
-      setAudioActiveSentenceId(audioQueue[target].id);
-      setIsAudioPlaying(true);
-      return;
-    }
-    const page = audioPage + direction;
-    if (page >= 0 && page < totalPages) {
-      requestAudioPage(page, direction < 0 ? -1 : null);
-      setIsAudioPlaying(true);
-    }
-  }, [audioQueue, audioIndex, audioPage, currentPage, totalPages, requestAudioPage]);
+    const player = getAudioPlayer();
+    const cursor = player?.cursor;
+    if (!cursor) { requestAudioPage(currentPage); return; }
+    if (player?.skip(direction)) return;
+    if (cursor.batch.page > 0) requestAudioPage(cursor.batch.page - 1, -1);
+  }, [getAudioPlayer, currentPage, requestAudioPage]);
 
   // Expose narration controls to Android Chrome's lock-screen media session.
   // This lets the browser keep the audio session active while the display is off.
@@ -570,8 +608,8 @@ export default function Reader() {
     next: () => {},
   });
   audioSessionControlsRef.current = {
-    play: () => { if (!isAudioPlaying) toggleAudioPlayback(); },
-    pause: () => { if (isAudioPlaying) pauseAudio(); },
+    play: () => { if (!audioPlayerRef.current?.playing) toggleAudioPlayback(); },
+    pause: pauseAudio,
     previous: () => skipAudioSentence(-1),
     next: () => skipAudioSentence(1),
   };
@@ -594,24 +632,6 @@ export default function Reader() {
     };
   }, []);
 
-  useEffect(() => {
-    if (!("mediaSession" in navigator) || !navigator.mediaSession) return;
-    const session = navigator.mediaSession;
-    if (audioQueue.length > 0) {
-      if ("MediaMetadata" in window) {
-        session.metadata = new MediaMetadata({
-          title: book?.title ?? "도서 낭독",
-          artist: "명작무료책방",
-          album: "오디오 낭독",
-        });
-      }
-      session.playbackState = isAudioPlaying ? "playing" : "paused";
-    } else {
-      session.playbackState = "none";
-      session.metadata = null;
-    }
-  }, [book?.title, audioQueue.length, isAudioPlaying]);
-
   const renderAudioLine = useCallback((line: string, lineIndex: number) => (
     <p key={lineIndex} data-line-index={lineIndex} className="mb-4 sm:mb-6" style={{ textIndent: "1em" }}>
       {displaySentences[lineIndex]?.map((sentence) => (
@@ -627,182 +647,31 @@ export default function Reader() {
     </p>
   ), [displaySentences, startAudioFromSentence, audioActiveSentenceId]);
 
-  // Prepare the page queue from the same paragraph spans rendered by the reader.
+  // Only the initial user-selected page needs a layout commit. All subsequent
+  // clips/pages advance directly inside the controller's media event handlers.
   useEffect(() => {
     if (!audioRequest || audioRequest.page !== currentPage || stride <= 0 || !isReady) return;
     return scheduleReaderAudioPreparation(() => {
-      const rows = collectPageAudioSentences(contentRef.current, audioRequest.page, stride, completedAudioSentenceIdsRef.current);
+      const rows = collectPageAudioSentences(contentRef.current, audioRequest.page, stride);
       const found = audioRequest.sentenceId === null ? 0 : rows.findIndex((row) => row.id === audioRequest.sentenceId);
       const index = audioRequest.sentenceId === -1 ? Math.max(0, rows.length - 1) : Math.max(0, found);
-      setAudioQueue(rows);
-      setAudioPage(audioRequest.page);
-      setAudioIndex(index);
-      setAudioActiveSentenceId(rows[index]?.id ?? null);
       setAudioRequest(null);
-      setIsAudioPlaying(rows.length > 0);
-      if (rows.length === 0) setIsAudioLoading(false);
+      getAudioPlayer()?.start({ page: audioRequest.page, rows }, index);
     });
-  }, [audioRequest, currentPage, stride, isReady]);
-
-  const advanceAudio = useCallback(() => {
-    if (audioIndex + 1 < audioQueue.length) {
-      setAudioIndex((index) => index + 1);
-      setAudioActiveSentenceId(audioQueue[audioIndex + 1].id);
-      return;
-    }
-    const crossedPage = audioQueue.reduce((furthestPage, row) => {
-      const lastTransition = row.pageTransitions[row.pageTransitions.length - 1]?.pageIndex;
-      return lastTransition === undefined ? furthestPage : Math.max(furthestPage, lastTransition);
-    }, audioPage);
-    const nextPage = crossedPage > audioPage ? crossedPage : audioPage + 1;
-    if (nextPage < totalPages) {
-      for (const row of audioQueue) completedAudioSentenceIdsRef.current.add(row.id);
-      const preparedPage = prefetchedPageRowsRef.current;
-      if (preparedPage?.page === nextPage && preparedPage.rows.length > 0) {
-        prefetchedPageRowsRef.current = null;
-        setCurrentPage(nextPage);
-        setAudioPage(nextPage);
-        setAudioQueue(preparedPage.rows);
-        setAudioIndex(0);
-        setAudioActiveSentenceId(preparedPage.rows[0].id);
-        setIsAudioPlaying(true);
-        setIsAudioLoading(false);
-      } else {
-        requestAudioPage(nextPage, null, true);
-      }
-      return;
-    }
-    setIsAudioPlaying(false);
-    setAudioActiveSentenceId(null);
-    setIsAudioLoading(false);
-  }, [audioIndex, audioQueue, audioPage, totalPages, requestAudioPage]);
-
-  // Synthesize or reuse one paragraph at a time. Quota/service failures use the browser voice.
-  useEffect(() => {
-    if (!isAudioPlaying || !audioQueue[audioIndex]) return;
-    const item = audioQueue[audioIndex];
-    const audio = audioElementRef.current;
-    const token = ++audioPlayTokenRef.current;
-    let cancelled = false;
-    let nextPageTransition = 0;
-    let speechStartedAt = 0;
-    let lastSpeechBoundaryAt = 0;
-    let speechFallbackTimer: number | null = null;
-    const stillCurrent = () => !cancelled && token === audioPlayTokenRef.current;
-    // Keep page movement tied to measured text boundaries when a legacy
-    // whole-paragraph audio item crosses pages.
-    const followSpokenPage = (progress: number) => {
-      if (!stillCurrent()) return;
-      while (nextPageTransition < item.pageTransitions.length &&
-        progress >= item.pageTransitions[nextPageTransition].progress) {
-        const pageIndex = item.pageTransitions[nextPageTransition].pageIndex;
-        setCurrentPage((page) => Math.max(page, pageIndex));
-        nextPageTransition += 1;
-      }
-    };
-    const speakInBrowser = () => {
-      if (!stillCurrent()) return;
-      setAudioUsesBrowserVoice(true);
-      setIsAudioLoading(false);
-      const utterance = new SpeechSynthesisUtterance(item.text);
-      utterance.lang = "ko-KR";
-      utterance.rate = audioSpeed;
-      speechStartedAt = performance.now();
-      lastSpeechBoundaryAt = speechStartedAt;
-      // Some browser voices do not emit boundary events for Korean. Estimate
-      // progress only after boundary callbacks stop arriving.
-      const estimatedDurationMs = Math.max(1500, (item.text.length / (4 * audioSpeed)) * 1000);
-      speechFallbackTimer = window.setInterval(() => {
-        const now = performance.now();
-        if (now - lastSpeechBoundaryAt > 1200) {
-          followSpokenPage(Math.min(1, (now - speechStartedAt) / estimatedDurationMs));
-        }
-      }, 250);
-      utterance.onboundary = (event) => {
-        lastSpeechBoundaryAt = performance.now();
-        if (event.charIndex >= 0 && item.text.length > 0) {
-          followSpokenPage(event.charIndex / item.text.length);
-        }
-      };
-      utterance.onend = () => {
-        if (speechFallbackTimer !== null) window.clearInterval(speechFallbackTimer);
-        if (stillCurrent()) {
-          followSpokenPage(1);
-          advanceAudio();
-        }
-      };
-      utterance.onerror = () => {
-        if (speechFallbackTimer !== null) window.clearInterval(speechFallbackTimer);
-        if (stillCurrent()) advanceAudio();
-      };
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(utterance);
-    };
-    setAudioActiveSentenceId(item.id);
-    setIsAudioLoading(true);
-    requestReaderAudio(item).then((result) => {
-      if (!stillCurrent()) return;
-      if (result.fallback) { speakInBrowser(); return; }
-      if (!audio) { speakInBrowser(); return; }
-      setAudioUsesBrowserVoice(false);
-      audio.src = result.audioUrl;
-      audio.playbackRate = audioSpeed;
-      audio.ontimeupdate = () => {
-        if (audio.duration > 0) followSpokenPage(audio.currentTime / audio.duration);
-      };
-      audio.onended = () => {
-        if (stillCurrent()) {
-          followSpokenPage(1);
-          advanceAudio();
-        }
-      };
-      audio.onerror = speakInBrowser;
-      setIsAudioLoading(false);
-      void audio.play().catch(speakInBrowser);
-    }).catch(speakInBrowser);
-    return () => {
-      cancelled = true;
-      if (speechFallbackTimer !== null) window.clearInterval(speechFallbackTimer);
-      if (audio) { audio.pause(); audio.onended = null; audio.onerror = null; audio.ontimeupdate = null; }
-      window.speechSynthesis?.cancel();
-    };
-  }, [isAudioPlaying, audioQueue, audioIndex, audioSpeed, bookId, requestReaderAudio, advanceAudio]);
-
-  // Prepare the next two clips while the current clip is playing to reduce silence.
-  useEffect(() => {
-    if (!isAudioPlaying || audioQueue.length === 0) return;
-    const upcoming = audioQueue.slice(audioIndex + 1, audioIndex + 3);
-    void Promise.all(upcoming.map((row) => prepareReaderAudio(row).catch(() => undefined)));
-  }, [isAudioPlaying, audioQueue, audioIndex, prepareReaderAudio]);
-
-  // Keep the first two clips of only the next page ready; do not synthesize the whole book.
-  useEffect(() => {
-    if (!isAudioPlaying || audioQueue.length === 0 || audioPage + 1 >= totalPages || stride <= 0) return;
-    const nextPage = audioPage + 1;
-    if (prefetchedPageRef.current === nextPage) return;
-    return scheduleReaderAudioPreparation(() => {
-      const alreadyQueued = new Set([
-        ...completedAudioSentenceIdsRef.current,
-        ...audioQueue.map((row) => row.id),
-      ]);
-      const rows = collectPageAudioSentences(contentRef.current, nextPage, stride, alreadyQueued);
-      if (rows.length === 0) return;
-      prefetchedPageRef.current = nextPage;
-      prefetchedPageRowsRef.current = { page: nextPage, rows };
-      void Promise.all(rows.slice(0, 2).map((row) => prepareReaderAudio(row).catch(() => undefined)));
-    });
-  }, [isAudioPlaying, audioQueue.length, audioPage, totalPages, stride, prepareReaderAudio]);
-
-  useEffect(() => {
-    if (!isAudioPlaying || !audioQueue[audioIndex]) return;
-    localStorage.setItem(audioProgressKey, JSON.stringify({ page: audioPage, sentenceId: audioQueue[audioIndex].id }));
-  }, [isAudioPlaying, audioQueue, audioIndex, audioProgressKey, audioPage]);
+  }, [audioRequest, currentPage, stride, isReady, getAudioPlayer]);
 
   useEffect(() => () => {
-    audioPlayTokenRef.current += 1;
-    audioElementRef.current?.pause();
-    window.speechSynthesis?.cancel();
-  }, []);
+    audioPlayerRef.current?.dispose();
+    audioPlayerRef.current = null;
+    audioRequestCacheRef.current.clear();
+    for (const audio of preloadedAudioRef.current.values()) {
+      audio.pause();
+      audio.removeAttribute("src");
+      audio.load();
+    }
+    preloadedAudioRef.current.clear();
+    if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "none";
+  }, [bookId]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -1201,7 +1070,11 @@ export default function Reader() {
                   <span>읽기 속도</span>
                   <select
                     value={audioSpeed}
-                    onChange={(event) => setAudioSpeed(Number(event.target.value))}
+                    onChange={(event) => {
+                      const speed = Number(event.target.value);
+                      setAudioSpeed(speed);
+                      audioPlayerRef.current?.setSpeed(speed);
+                    }}
                     className="rounded border border-border bg-background px-3 py-2"
                     aria-label="낭독 속도"
                   >
@@ -1209,6 +1082,7 @@ export default function Reader() {
                   </select>
                 </label>
                 {audioUsesBrowserVoice && <p className="mt-2 text-xs text-muted-foreground">브라우저 기본 음성 사용 중</p>}
+                {audioPlaybackError && <p role="status" className="mt-2 text-xs text-amber-700">{audioPlaybackError}</p>}
               </div>
 
               {/* Font Size */}
