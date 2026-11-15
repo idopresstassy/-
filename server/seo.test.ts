@@ -14,3 +14,17 @@ describe("buildSitemap", () => {
     expect(sitemap).not.toContain("/login");
   });
 });
+
+import { readFileSync } from "node:fs";
+
+describe("public HTML accessibility and catalogue description", () => {
+  const html = readFileSync(new URL("../client/index.html", import.meta.url), "utf8");
+  it("does not restrict mobile zoom", () => {
+    expect(html).not.toMatch(/maximum-scale\s*=|user-scalable\s*=\s*no/);
+  });
+  it("does not publish a stale hardcoded book count", () => {
+    const description = html.match(/name="description" content="([^"]+)"/)?.[1];
+    expect(description).toContain("명작무료책방");
+    expect(description).not.toMatch(/\d+권/);
+  });
+});
