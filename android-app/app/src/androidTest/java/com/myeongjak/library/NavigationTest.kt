@@ -9,6 +9,7 @@ import androidx.test.uiautomator.UiDevice
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** Exercises a real system Back event, including API 36's predictive-back dispatch. */
 @RunWith(AndroidJUnit4::class)
@@ -18,15 +19,19 @@ class NavigationTest {
     device.wakeUp()
     ActivityScenario.launch(MainActivity::class.java).use { scenario ->
       scenario.onActivity { activity ->
-        view(activity).loadDataWithBaseURL("https://korealib.com/", "<html><body>Navigation test</body></html>", "text/html", "UTF-8", null)
+        view(activity).stopLoading()
+        view(activity).loadDataWithBaseURL("https://korealib.com/", "<html><body id='nav-fixture'>Navigation test</body></html>", "text/html", "UTF-8", "https://korealib.com/")
       }
+      val fixtureReady = AtomicBoolean(false)
       await(10000) {
-        var ready = false
-        scenario.onActivity { ready = view(it).progress == 100 }
-        ready
+        scenario.onActivity {
+          view(it).evaluateJavascript("!!document.getElementById('nav-fixture')") { value ->
+            fixtureReady.set(value == "true")
+          }
+        }
+        fixtureReady.get()
       }
       scenario.onActivity {
-        view(it).clearHistory()
         view(it).evaluateJavascript("history.pushState({}, '', '/read/90003');", null)
       }
       await(10000) {
