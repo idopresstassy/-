@@ -1,4 +1,4 @@
-# 명작무료책방 Android 낭독 시험판 0.2.1
+# 명작무료책방 Android 낭독 시험판 0.2.2
 
 ## What changed
 
@@ -16,7 +16,7 @@ Korean device speech, synthesized to a temporary file for the same native queue.
 
 ## Build / validation
 
-Java 17, Android SDK 35 and Gradle 8.9:
+Java 17, Android SDK 36 and Gradle 8.11.1:
 
 ```
 gradle -p android-app testDebugUnitTest assembleDebug assembleDebugAndroidTest
@@ -60,3 +60,29 @@ The short six-clip test is retained. Real Galaxy/network behavior still needs de
 Test APKs use ephemeral CI debug signing. Updating an older test APK may require uninstalling
 that test app first; this clears local app data, not server books or membership. Store releases
 must use a retained release/upload signing key instead.
+
+## 0.2.2: actual MP3 transitions and a stuck player
+
+The exact reported quote stall was reproduced with the original Cloud MP3s on API 35.
+With Media3 1.5.1 at 0.8x, both normal and delayed-load runs stopped at sentence 29,
+page 11, position 2183 / 2184 ms. The player stayed playing=true, loading=false with no
+error or recovery attempt. The old synthetic WAV long-queue test still passed, explaining
+why the previous network-only recovery tests missed this failure.
+
+Update Media3 from 1.5.1 to 1.11.1, explicitly enable its internal no-progress (10 seconds),
+not-ending (10 seconds past duration) and buffering-no-progress (90 seconds) detection, and
+retry recognized StuckPlayerException states with the existing position-preserving recovery.
+Suppression/focus and user pause are excluded. After the update, the same API 35 MP3 tests
+complete in 92 and 95 seconds, with every clip played and page 12 reached while locked.
+Native state includes the app version, actual playing state, buffer position and suppression
+reason for diagnosis. The reported failure is reproduced in the emulator; the user's
+physical Galaxy still needs confirmation with the new APK.
+
+MoneyAudioTest uses five original cached 24 kHz Cloud MP3 files from 돈 around the reported
+quote, plays at 0.8x with the screen off and Activity destroyed, checks every clip progresses
+and page 12 is reached, and repeats with a 45-second next-file delay. It makes no Cloud TTS
+calls. The dedicated workflow targets API 36; API 37 is unavailable in this CI SDK repository.
+The full API 35 suite passes all five instrumented tests, including the 726-second queue
+with network failures and pause/resume. The dedicated API 36 run passes both real MP3 tests.
+Before: Actions run 43796747387, commit f01e9bd. After: run 43797130303 (API 35) and
+43797130289 (API 36), commit 70af0c5. Documentation-only result updates do not change the APK.

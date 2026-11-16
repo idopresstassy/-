@@ -4,7 +4,7 @@ plugins {
 }
 android {
   namespace = "com.myeongjak.library"
-  compileSdk = 35
+  compileSdk = 36
   buildFeatures { buildConfig = true }
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_17
@@ -15,8 +15,8 @@ android {
     applicationId = "com.myeongjak.library"
     minSdk = 26
     targetSdk = 35
-    versionCode = 3
-    versionName = "0.2.1"
+    versionCode = 4
+    versionName = "0.2.2"
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
 }
@@ -29,6 +29,6 @@ dependencies {
   androidTestImplementation("androidx.test.uiautomator:uiautomator:2.3.0")
   testImplementation("junit:junit:4.13.2")
   testImplementation("org.json:json:20240303")
-  implementation("androidx.media3:media3-exoplayer:1.5.1")
-  implementation("androidx.media3:media3-session:1.5.1")
+  implementation("androidx.media3:media3-exoplayer:1.11.1")
+  implementation("androidx.media3:media3-session:1.11.1")
 }
