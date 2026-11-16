@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { ReaderAudioPlayback, type ReaderAudioBatch, type ReaderAudioClip, type ReaderSpeechCallbacks } from "./readerAudioPlayback";
 import type { ReaderAudioSentence } from "./readerAudioText";
+import { retrySelectedNarrator } from "./readerNarratorRetry";
 
 class FakeAudio {
   private source = "";
@@ -63,6 +64,56 @@ function setup(batches: ReaderAudioBatch[], request = vi.fn(async (item: ReaderA
 }
 
 describe("ReaderAudioPlayback without UI commits", () => {
+  it("rechecks the chosen narrator after fallback and ignores the old speech completion", async () => {
+    const batch = { page: 0, rows: [row(0), row(1)] };
+    const request = vi.fn(async (item: ReaderAudioSentence): Promise<ReaderAudioClip> => clip(item))
+      .mockResolvedValueOnce({ fallback: true });
+    const s = setup([batch], request);
+    s.player.start(batch);
+    await settle();
+    const oldSpeech = s.speech()!;
+    expect(s.onState.mock.lastCall![0].browserVoice).toBe(true);
+    expect(retrySelectedNarrator(s.player, vi.fn())).toBe(true);
+    await settle();
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(s.audio.src).toBe("audio-0");
+    expect(s.onState.mock.lastCall![0].browserVoice).toBe(false);
+    oldSpeech.end();
+    expect(s.player.cursor?.index).toBe(0);
+    s.audio.end();
+    expect(s.audio.src).toBe("audio-1");
+  });
+
+  it("discards a failed MP3 URL before retrying the same paragraph", async () => {
+    const batch = { page: 0, rows: [row(0)] };
+    const request = vi.fn(async (_item: ReaderAudioSentence): Promise<ReaderAudioClip> => ({ fallback: false, audioUrl: "fresh-url" }))
+      .mockResolvedValueOnce({ fallback: false, audioUrl: "expired-url" });
+    const s = setup([batch], request);
+    s.player.start(batch);
+    await settle();
+    s.audio.onerror?.();
+    expect(s.onState.mock.lastCall![0].browserVoice).toBe(true);
+    retrySelectedNarrator(s.player, vi.fn());
+    await settle();
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(s.audio.src).toBe("fresh-url");
+    expect(s.onState.mock.lastCall![0].browserVoice).toBe(false);
+  });
+
+  it("retains fallback when the server still refuses Cloud audio without a retry loop", async () => {
+    const batch = { page: 0, rows: [row(0)] };
+    const request = vi.fn(async (_item: ReaderAudioSentence): Promise<ReaderAudioClip> => ({ fallback: true }));
+    const s = setup([batch], request);
+    s.player.start(batch);
+    await settle();
+    retrySelectedNarrator(s.player, vi.fn());
+    await settle();
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(s.speak).toHaveBeenCalledTimes(2);
+    expect(s.onState.mock.lastCall![0].browserVoice).toBe(true);
+    expect(s.player.playing).toBe(true);
+  });
+
   it("starts the next prepared MP3 synchronously on ended across three pages", async () => {
     const batches = [0, 1, 2].map((page) => ({ page, rows: [row(page * 2, page), row(page * 2 + 1, page)] }));
     const { player, audio, onCursor } = setup(batches);

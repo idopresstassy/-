@@ -173,6 +173,8 @@ export class ReaderAudioPlayback {
     const browser = () => {
       if (!current() || fallbackStarted) return;
       fallbackStarted = true;
+      // A failed/expired MP3 URL must not trap subsequent attempts in fallback.
+      this.ready.delete(row);
       const audio = this.options.audio;
       audio.onerror = null;
       audio.onended = null;
