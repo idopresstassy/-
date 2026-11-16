@@ -1,6 +1,5 @@
 package com.myeongjak.library
 
-import android.app.Activity
 import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
@@ -9,6 +8,8 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
 import android.widget.FrameLayout
+import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -17,8 +18,17 @@ import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import org.json.JSONObject
 
-class MainActivity : Activity() {
+class MainActivity : ComponentActivity() {
   private lateinit var webView: WebView
+  private val webBack = object : OnBackPressedCallback(false) {
+    override fun handleOnBackPressed() {
+      if (webView.canGoBack()) webView.goBack()
+      else {
+        isEnabled = false
+        onBackPressedDispatcher.onBackPressed()
+      }
+    }
+  }
   private var visible = false
   private val observer: (String) -> Unit = { state ->
     if (visible) runOnUiThread { deliver(state) }
@@ -26,6 +36,7 @@ class MainActivity : Activity() {
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+    onBackPressedDispatcher.addCallback(this, webBack)
     WindowCompat.setDecorFitsSystemWindows(window, false)
     window.statusBarColor = Color.TRANSPARENT
     window.navigationBarColor = Color.TRANSPARENT
@@ -44,7 +55,13 @@ class MainActivity : Activity() {
           }
           return true
         }
-        override fun onPageFinished(view: WebView, url: String) { deliver(NarrationState.latest) }
+        override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) {
+          webBack.isEnabled = view.canGoBack()
+        }
+        override fun onPageFinished(view: WebView, url: String) {
+          webBack.isEnabled = view.canGoBack()
+          deliver(NarrationState.latest)
+        }
       }
     }
     if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
@@ -111,10 +128,6 @@ class MainActivity : Activity() {
     visible = false
     webView.onPause()
     super.onPause()
-  }
-  @Deprecated("Deprecated in Java")
-  override fun onBackPressed() {
-    if (webView.canGoBack()) webView.goBack() else super.onBackPressed()
   }
   override fun onDestroy() {
     NarrationState.unsubscribe(observer)
