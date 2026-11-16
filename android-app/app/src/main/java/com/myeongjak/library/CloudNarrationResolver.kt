@@ -10,6 +10,7 @@ import java.net.URL
 import java.util.concurrent.ConcurrentHashMap
 
 /** Called by ExoPlayer's loader thread, including while the Activity is stopped. */
+@androidx.annotation.OptIn(markerClass = [androidx.media3.common.util.UnstableApi::class])
 class CloudNarrationResolver(
   private val queue: NarrationQueue,
   private val fallback: DeviceSpeechFiles,
@@ -64,6 +65,7 @@ class CloudNarrationResolver(
 }
 
 /** Test substitution is never accepted from the WebView or an Intent. */
+@androidx.annotation.OptIn(markerClass = [androidx.media3.common.util.UnstableApi::class])
 object AudioResolverFactory {
   internal var testResolver: ResolvingDataSource.Resolver? = null
   fun create(queue: NarrationQueue, fallback: DeviceSpeechFiles, voices: MutableSet<Int>): ResolvingDataSource.Resolver =

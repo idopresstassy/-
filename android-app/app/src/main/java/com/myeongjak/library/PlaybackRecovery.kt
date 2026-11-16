@@ -6,6 +6,7 @@ import androidx.media3.datasource.HttpDataSource
 import java.io.IOException
 
 /** Never treat a pause, an audio-focus change or the end of a book as a retry. */
+@androidx.annotation.OptIn(markerClass = [androidx.media3.common.util.UnstableApi::class])
 object PlaybackRecovery {
   fun delayMs(attempt: Int): Long = when (attempt) {
     1 -> 1000L
