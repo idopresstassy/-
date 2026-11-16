@@ -70,6 +70,20 @@ describe("audio position after line spacing/font size reflow", () => {
     expect(f.onPage).toHaveBeenLastCalledWith(clip, 3);
   });
 
+  it("retains fragment timing when the browser cannot measure character ranges", () => {
+    const f = fixture([{ id: 0, text: "가나다라", pages: [0, 0, 1, 1] }]);
+    vi.spyOn(document, "createRange").mockReturnValue({ setStart() {}, setEnd() {}, detach() {},
+      getBoundingClientRect: () => ({ left: 0, width: 0, height: 0 }),
+    } as unknown as Range);
+    Object.assign(f.spans[0], { getClientRects: () => [
+      { left: -500, width: 50, height: 20 }, { left: -400, width: 50, height: 20 },
+    ] });
+    f.position.update(row(0, "가나다라"), 0.6);
+    expect(f.onPage.mock.lastCall![1]).toBe(1);
+    f.position.update(row(0, "다라"), 0);
+    expect(f.onPage.mock.lastCall![1]).toBe(1);
+  });
+
   it("caches measurements between media ticks and invalidates them for each reflow", () => {
     const f = fixture([{ id: 0, text: "가나다라", pages: [0, 0, 1, 1] }]);
     const clip = row(0, "가나다라");

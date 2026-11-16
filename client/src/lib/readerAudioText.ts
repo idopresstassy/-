@@ -240,7 +240,18 @@ export function measureReaderAudioLayout(
   range.detach?.();
   const pages = [...weights.entries()].sort(([a], [b]) => a - b);
   const total = pages.reduce((sum, [, weight]) => sum + weight, 0);
-  if (!total) return null;
+  if (!total) {
+    // Keep the existing fragment-based fallback for browsers whose character
+    // ranges have no bounds; remap it to the queued tail if this is a partial clip.
+    const full = measureParagraphPageTransitions(span, rootLeft, stride);
+    const firstPage = Math.floor(Math.max(0, span.getBoundingClientRect().left - rootLeft) / stride);
+    const from = start / spoken.length, to = end / spoken.length;
+    return {
+      pageIndex: full.filter((entry) => entry.progress <= from).at(-1)?.pageIndex ?? firstPage,
+      pageTransitions: full.filter((entry) => entry.progress > from && entry.progress < to)
+        .map((entry) => ({ pageIndex: entry.pageIndex, progress: (entry.progress - from) / (to - from) })),
+    };
+  }
   let elapsed = 0;
   return {
     pageIndex: pages[0][0],
