@@ -27,6 +27,7 @@ import androidx.media3.session.MediaSessionService
 import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
 
+@androidx.annotation.OptIn(markerClass = [androidx.media3.common.util.UnstableApi::class])
 class PlaybackService : MediaSessionService() {
   private lateinit var player: ExoPlayer
   private lateinit var speech: DeviceSpeechFiles

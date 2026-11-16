@@ -37,7 +37,7 @@ jobs:
           target: google_apis
           arch: x86_64
           disable-animations: true
-          script: gradle -p android-app connectedDebugAndroidTest
+          script: gradle -p android-app connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.myeongjak.library.MoneyAudioTest,com.myeongjak.library.ScreenOffPlaybackTest
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -1,4 +1,12 @@
 # Dependencies
+# Android local build state and private signing material
+**/.gradle/
+**/local.properties
+*.jks
+*.keystore
+*.p12
+**/signing-password.txt
+
 **/node_modules
 .pnpm-store/
 
