@@ -6,6 +6,11 @@ export type ReaderAudioSentence = {
   pageTransitions: Array<{ pageIndex: number; progress: number }>;
 };
 
+export type ReaderAudioLayout = {
+  pageIndex: number;
+  pageTransitions: ReaderAudioSentence["pageTransitions"];
+};
+
 const MAX_TTS_BYTES = 3800;
 
 function byteLength(value: string) {
@@ -196,6 +201,69 @@ function getSpokenTextByPage(
   }
   range.detach?.();
   return new Map([...pageText.entries()].filter(([, value]) => value.trim().length > 0));
+}
+
+/** Measure the text already playing, without changing its text or cache identity. */
+export function measureReaderAudioLayout(
+  root: HTMLElement | null, stride: number, row: ReaderAudioSentence,
+): ReaderAudioLayout | null {
+  if (!root || stride <= 0) return null;
+  const span = root.querySelector<HTMLElement>(`[data-audio-sentence-id="${row.id}"]`);
+  const node = span?.firstChild;
+  if (!span || !node || node.nodeType !== Node.TEXT_NODE) return null;
+  const text = node.textContent ?? "";
+  const characters = getSpokenCharacterRanges(text).map((range) => ({
+    ...range, spoken: text.slice(range.offset, range.offset + range.length).replace(/\s+/g, " "),
+  }));
+  const spoken = characters.map((character) => character.spoken).join("");
+  // Starting on a later page can queue only the tail of a paragraph. Its
+  // progress is relative to that tail, not to the whole displayed paragraph.
+  const start = spoken.endsWith(row.text) ? spoken.length - row.text.length : spoken.indexOf(row.text);
+  if (start < 0 || !row.text) return null;
+  const end = start + row.text.length;
+  const rootLeft = root.getBoundingClientRect().left;
+  const weights = new Map<number, number>();
+  const range = document.createRange();
+  let offset = 0;
+  for (const character of characters) {
+    const nextOffset = offset + character.spoken.length;
+    const weight = Math.max(0, Math.min(end, nextOffset) - Math.max(start, offset));
+    offset = nextOffset;
+    if (!weight) continue;
+    range.setStart(node, character.offset);
+    range.setEnd(node, character.offset + character.length);
+    const rect = range.getBoundingClientRect();
+    if (rect.width <= 0 && rect.height <= 0) continue;
+    const page = Math.floor(Math.max(0, rect.left - rootLeft) / stride);
+    weights.set(page, (weights.get(page) ?? 0) + weight);
+  }
+  range.detach?.();
+  const pages = [...weights.entries()].sort(([a], [b]) => a - b);
+  const total = pages.reduce((sum, [, weight]) => sum + weight, 0);
+  if (!total) return null;
+  let elapsed = 0;
+  return {
+    pageIndex: pages[0][0],
+    pageTransitions: pages.slice(0, -1).map(([, weight], index) => {
+      elapsed += weight;
+      return { pageIndex: pages[index + 1][0], progress: elapsed / total };
+    }),
+  };
+}
+
+/** Continue in text order even when reflow moves the next paragraph backwards. */
+export function collectFollowingAudioSentences(
+  root: HTMLElement | null, stride: number, afterId: number,
+): ReaderAudioSentence[] {
+  if (!root || stride <= 0) return [];
+  const spans = Array.from(root.querySelectorAll<HTMLElement>("[data-audio-sentence-id]"));
+  const next = spans.find((span) => Number(span.dataset.audioSentenceId) > afterId &&
+    span.closest("[data-line-index]") && cleanReaderAudioText(span.dataset.audioText ?? span.textContent ?? ""));
+  if (!next) return [];
+  const page = Math.floor(Math.max(0,
+    next.getBoundingClientRect().left - root.getBoundingClientRect().left) / stride);
+  const excluded = new Set(spans.map((span) => Number(span.dataset.audioSentenceId)).filter((id) => id <= afterId));
+  return collectPageAudioSentences(root, page, stride, excluded);
 }
 
 export function collectPageAudioSentences(

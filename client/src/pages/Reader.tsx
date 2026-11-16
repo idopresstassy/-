@@ -4,6 +4,7 @@ import { useRoute, useLocation } from "wouter";
 import {
   useState,
   useEffect,
+  useLayoutEffect,
   useRef,
   useCallback,
   useMemo,
@@ -34,7 +35,8 @@ import {
   SkipForward,
 } from "lucide-react";
 import { useOfflineCache } from "@/hooks/useOfflineCache";
-import { cleanReaderAudioText, collectPageAudioSentences, collectBookAudioSentences, splitReaderParagraph, type ReaderAudioSentence } from "@/lib/readerAudioText";
+import { cleanReaderAudioText, collectPageAudioSentences, collectBookAudioSentences, collectFollowingAudioSentences, measureReaderAudioLayout, splitReaderParagraph, type ReaderAudioSentence } from "@/lib/readerAudioText";
+import { ReaderAudioPosition } from "@/lib/readerAudioPosition";
 import { scheduleReaderAudioPreparation } from "@/lib/readerAudioScheduling";
 import { ReaderAudioPlayback, type ReaderAudioBatch } from "@/lib/readerAudioPlayback";
 import { speakReaderText } from "@/lib/readerBrowserSpeech";
@@ -406,7 +408,7 @@ export default function Reader() {
   // Calculate columns and pages
   useEffect(() => {
     if (
-      !isReady ||
+      !isReady || readMode !== "page" ||
       !contentRef.current ||
       dimensions.width === 0 ||
       lines.length === 0
@@ -450,6 +452,9 @@ export default function Reader() {
     isTwoPageMode,
     GAP_SIZE,
     dimensions.width,
+    fontSize,
+    lineHeight,
+    readMode,
   ]);
 
   // Save progress on page change
@@ -496,10 +501,33 @@ export default function Reader() {
 
   // The controller reads current layout/configuration through refs, but never
   // waits for a React render to advance the media queue.
-  const audioRuntimeRef = useRef({ bookId, totalPages, stride, audioSpeed, audioProgressKey,
+  const audioRuntimeRef = useRef({ bookId, totalPages, stride, audioSpeed, audioProgressKey, readMode,
     title: book?.title ?? "도서 낭독", requestReaderAudio, prepareReaderAudio });
-  audioRuntimeRef.current = { bookId, totalPages, stride, audioSpeed, audioProgressKey,
+  audioRuntimeRef.current = { bookId, totalPages, stride, audioSpeed, audioProgressKey, readMode,
     title: book?.title ?? "도서 낭독", requestReaderAudio, prepareReaderAudio };
+
+  const savedAudioPositionRef = useRef("");
+  const audioPosition = useMemo(() => new ReaderAudioPosition(
+    (row) => audioRuntimeRef.current.readMode === "page"
+      ? measureReaderAudioLayout(contentRef.current, audioRuntimeRef.current.stride, row) : null,
+    (row, page) => {
+      setCurrentPage(page);
+      const value = JSON.stringify({ page, sentenceId: row.id });
+      const key = audioRuntimeRef.current.audioProgressKey;
+      if (savedAudioPositionRef.current === key + value) return;
+      try {
+        localStorage.setItem(key, value);
+        savedAudioPositionRef.current = key + value;
+      } catch { /* Storage can be disabled; narration must continue. */ }
+    },
+  ), []);
+
+  // CSS columns move the text, not the audio. Remeasure the active clip after
+  // each layout commit, including paused audio, without restarting playback.
+  useLayoutEffect(() => {
+    audioPosition.reflow();
+  }, [audioPosition, fontSize, lineHeight, columnDimensions, containerWidth,
+    stride, readMode, isEinkMode, lines]);
 
   const getAudioPlayer = useCallback(() => {
     if (audioPlayerRef.current) return audioPlayerRef.current;
@@ -508,28 +536,17 @@ export default function Reader() {
       audio: audioElementRef.current,
       request: (row) => audioRuntimeRef.current.requestReaderAudio(row),
       preload: (row) => audioRuntimeRef.current.prepareReaderAudio(row),
-      nextBatch: (batch: ReaderAudioBatch, excluded) => {
-        const { totalPages, stride } = audioRuntimeRef.current;
-        if (stride <= 0) return null;
-        const crossedPage = batch.rows.reduce((page, row) => Math.max(page,
-          row.pageTransitions.at(-1)?.pageIndex ?? page), batch.page);
-        // A paragraph can span multiple pages. Resume at its ending page,
-        // excluding it, so remaining paragraphs are neither skipped nor repeated.
-        for (let page = Math.max(batch.page + 1, crossedPage); page < totalPages; ++page) {
-          const rows = collectPageAudioSentences(contentRef.current, page, stride, excluded);
-          if (rows.length) return { page, rows };
-        }
-        return null;
+      nextBatch: (batch: ReaderAudioBatch) => {
+        const lastId = batch.rows.at(-1)?.id;
+        if (lastId === undefined) return null;
+        const rows = collectFollowingAudioSentences(contentRef.current, audioRuntimeRef.current.stride, lastId);
+        return rows.length ? { page: rows[0].pageNumber - 1, rows } : null;
       },
       speak: speakReaderText,
       onCursor: (batch, index) => {
         const row = batch.rows[index];
         setAudioActiveSentenceId(row.id);
-        setCurrentPage(batch.page);
-        try {
-          localStorage.setItem(audioRuntimeRef.current.audioProgressKey,
-            JSON.stringify({ page: batch.page, sentenceId: row.id }));
-        } catch { /* Storage can be disabled; narration must continue. */ }
+        audioPosition.update(row, 0);
         if (!nativeNarrationBridge() && "mediaSession" in navigator && "MediaMetadata" in window) {
           navigator.mediaSession.metadata = new MediaMetadata({
             title: audioRuntimeRef.current.title, artist: "명작무료책방", album: "오디오 낭독",
@@ -537,15 +554,17 @@ export default function Reader() {
         }
       },
       onProgress: (row, progress) => {
-        const transition = row.pageTransitions.filter((entry) => progress >= entry.progress).at(-1);
-        if (transition) setCurrentPage((page) => Math.max(page, transition.pageIndex));
+        audioPosition.update(row, progress);
       },
       onState: (state) => {
         setIsAudioPlaying(state.playing);
         setIsAudioLoading(state.loading);
         setAudioUsesBrowserVoice(state.browserVoice);
         setAudioPlaybackError(state.error);
-        if (!state.playing && !audioPlayerRef.current?.cursor) setAudioActiveSentenceId(null);
+        if (!state.playing && !audioPlayerRef.current?.cursor) {
+          setAudioActiveSentenceId(null);
+          audioPosition.reset();
+        }
         // Keep the OS session active while the next MP3 is loading, too.
         if (!nativeNarrationBridge() && "mediaSession" in navigator) navigator.mediaSession.playbackState = state.playing ? "playing" : "paused";
       },
@@ -696,6 +715,8 @@ export default function Reader() {
   }, [audioRequest, currentPage, stride, isReady, getAudioPlayer]);
 
   useEffect(() => () => {
+    audioPosition.reset();
+    savedAudioPositionRef.current = "";
     audioPlayerRef.current?.dispose();
     audioPlayerRef.current = null;
     audioRequestCacheRef.current.clear();
