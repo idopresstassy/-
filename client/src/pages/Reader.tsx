@@ -39,6 +39,7 @@ import { scheduleReaderAudioPreparation } from "@/lib/readerAudioScheduling";
 import { ReaderAudioPlayback, type ReaderAudioBatch } from "@/lib/readerAudioPlayback";
 import { speakReaderText } from "@/lib/readerBrowserSpeech";
 import { NativeReaderAudioPlayback, nativeNarrationBridge } from "@/lib/readerNativeAudio";
+import { retrySelectedNarrator } from "@/lib/readerNarratorRetry";
 
 type Theme = "light" | "dark" | "sepia" | "eink";
 
@@ -596,15 +597,34 @@ export default function Reader() {
     audioPlayerRef.current?.pause();
   }, []);
 
+  const retryAudioNarrator = useCallback(() => {
+    const player = getAudioPlayer();
+    if (!player) return;
+    retrySelectedNarrator(player, () => {
+      audioRequestCacheRef.current.clear();
+      for (const audio of preloadedAudioRef.current.values()) {
+        audio.pause();
+        audio.removeAttribute("src");
+        audio.load();
+      }
+      preloadedAudioRef.current.clear();
+      setAudioPlaybackError(null);
+    });
+  }, [getAudioPlayer]);
+
   const toggleAudioPlayback = useCallback(() => {
     const player = getAudioPlayer();
     if (player?.playing) { pauseAudio(); return; }
-    if (player?.cursor) { player.resume(); return; }
+    if (player?.cursor) {
+      if (audioUsesBrowserVoice) retryAudioNarrator();
+      else player.resume();
+      return;
+    }
     let saved: { page?: number; sentenceId?: number } = {};
     try { saved = JSON.parse(localStorage.getItem(audioProgressKey) || "{}"); } catch { /* Start from the current page. */ }
     requestAudioPage(Number.isInteger(saved.page) ? Number(saved.page) : currentPage,
       Number.isInteger(saved.sentenceId) ? Number(saved.sentenceId) : null);
-  }, [getAudioPlayer, pauseAudio, audioProgressKey, requestAudioPage, currentPage]);
+  }, [getAudioPlayer, pauseAudio, audioProgressKey, requestAudioPage, currentPage, audioUsesBrowserVoice, retryAudioNarrator]);
 
   const skipAudioSentence = useCallback((direction: -1 | 1) => {
     const player = getAudioPlayer();
@@ -1096,7 +1116,20 @@ export default function Reader() {
                     {[0.8, 1, 1.2, 1.5].map((speed) => <option key={speed} value={speed}>{speed.toFixed(1)}배</option>)}
                   </select>
                 </label>
-                {audioUsesBrowserVoice && <p className="mt-2 text-xs text-muted-foreground">{nativeNarrationBridge() ? "기기 기본 음성 사용 중" : "브라우저 기본 음성 사용 중"}</p>}
+                {audioUsesBrowserVoice && (
+                  <div className="mt-3 space-y-2">
+                    <p role="status" className="text-xs text-muted-foreground">
+                      {nativeNarrationBridge() ? "기기 기본 음성 사용 중" : "브라우저 기본 음성 사용 중"}
+                    </p>
+                    <button type="button" onClick={retryAudioNarrator} disabled={isAudioLoading || audioActiveSentenceId === null}
+                      className="w-full rounded-lg border border-amber-600 px-3 py-2 text-sm text-amber-700 dark:text-amber-400 disabled:opacity-50">
+                      {isAudioLoading ? "선택한 성우 확인 중…" : "선택한 성우로 다시 듣기"}
+                    </button>
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      현재 문단의 처음부터 다시 읽습니다. 구글 음성을 사용할 수 없거나 월 사용 한도에 도달한 경우에는 기본 음성으로 이어 읽습니다.
+                    </p>
+                  </div>
+                )}
                 {nativeNarrationBridge() && !audioUsesBrowserVoice && <p className="mt-2 text-xs text-muted-foreground">앱에서 연속 낭독 중 · 화면을 꺼도 이어듣기</p>}
                 {audioPlaybackError && <p role="status" className="mt-2 text-xs text-amber-700">{audioPlaybackError}</p>}
               </div>
