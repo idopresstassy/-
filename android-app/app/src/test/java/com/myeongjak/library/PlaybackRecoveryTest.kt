@@ -1,12 +1,29 @@
 package com.myeongjak.library
 
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.util.StuckPlayerException
 import org.junit.Assert.*
 import org.junit.Test
 import java.io.IOException
 import java.net.SocketTimeoutException
 
 class PlaybackRecoveryTest {
+  @Test fun recoversPlayerStallsWithoutNeedingANetworkError() {
+    for (kind in listOf(
+      StuckPlayerException.STUCK_BUFFERING_NOT_LOADING,
+      StuckPlayerException.STUCK_BUFFERING_NO_PROGRESS,
+      StuckPlayerException.STUCK_PLAYING_NO_PROGRESS,
+      StuckPlayerException.STUCK_PLAYING_NOT_ENDING
+    )) {
+      assertTrue(PlaybackRecovery.canRetry(PlaybackException.ERROR_CODE_UNSPECIFIED,
+        IllegalStateException(StuckPlayerException(kind, 10000))))
+    }
+  }
+  @Test fun doesNotForceSuppressedPlaybackOrUnrelatedTimeoutsToResume() {
+    assertFalse(PlaybackRecovery.canRetry(PlaybackException.ERROR_CODE_UNSPECIFIED,
+      StuckPlayerException(StuckPlayerException.STUCK_SUPPRESSED, 10000)))
+    assertFalse(PlaybackRecovery.canRetry(PlaybackException.ERROR_CODE_TIMEOUT, IllegalStateException()))
+  }
   @Test fun backsOffWithoutAStoppingPageOrAttemptLimit() {
     assertEquals(listOf(1000L, 2000L, 5000L, 10000L, 15000L, 15000L),
       listOf(1, 2, 3, 4, 5, 100).map { PlaybackRecovery.delayMs(it) })

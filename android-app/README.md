@@ -1,4 +1,4 @@
-# 명작무료책방 Android 낭독 시험판 0.2.1
+# 명작무료책방 Android 낭독 시험판 0.2.2
 
 ## What changed
 
@@ -16,7 +16,7 @@ Korean device speech, synthesized to a temporary file for the same native queue.
 
 ## Build / validation
 
-Java 17, Android SDK 35 and Gradle 8.9:
+Java 17, Android SDK 36 and Gradle 8.11.1:
 
 ```
 gradle -p android-app testDebugUnitTest assembleDebug assembleDebugAndroidTest
@@ -60,3 +60,23 @@ The short six-clip test is retained. Real Galaxy/network behavior still needs de
 Test APKs use ephemeral CI debug signing. Updating an older test APK may require uninstalling
 that test app first; this clears local app data, not server books or membership. Store releases
 must use a retained release/upload signing key instead.
+
+## 0.2.2: actual MP3 transitions and a stuck player
+
+The phone successfully fetched the reported short quote and subsequent audio, so the exact
+Galaxy failure is not yet isolated. Previous 0.2.1 tests used WAV clips and only exercised
+network errors. They did not establish that actual Cloud MP3 transitions work on the device.
+
+Update Media3 from 1.5.1 to 1.11.1, explicitly enable its internal no-progress (10 seconds),
+not-ending (10 seconds past duration) and buffering-no-progress (90 seconds) detection, and
+retry recognized StuckPlayerException states with the existing position-preserving recovery.
+Suppression/focus and user pause are excluded. This hardens a known missing recovery path;
+it does not claim that this specific Galaxy stop was reproduced. Native state includes the
+app version, actual playing state, buffer position and suppression reason for diagnosis.
+
+MoneyAudioTest uses five original cached 24 kHz Cloud MP3 files from 돈 around the reported
+quote, plays at 0.8x with the screen off and Activity destroyed, checks every clip progresses
+and page 12 is reached, and repeats with a 45-second next-file delay. It makes no Cloud TTS
+calls. The dedicated workflow targets API 36; API 37 is unavailable in this CI SDK repository.
+The full API 35 suite retains the 12-minute retry/pause tests. Real Galaxy confirmation is
+still required before calling the reported issue resolved.

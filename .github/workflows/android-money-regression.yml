@@ -18,7 +18,7 @@ jobs:
           java-version: "17"
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: "8.9"
+          gradle-version: "8.11.1"
       - name: Build the installed player with real Money fixtures
         run: gradle -p android-app assembleDebug assembleDebugAndroidTest
       - name: Enable emulator acceleration
@@ -28,7 +28,7 @@ jobs:
           sudo udevadm trigger --name-match=kvm
       - uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 37
+          api-level: 36
           target: google_apis
           arch: x86_64
           disable-animations: true
@@ -36,7 +36,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: money-mp3-api37-results
+          name: money-mp3-api36-results
           path: |
             android-app/app/build/reports/
             android-app/app/build/outputs/androidTest-results/

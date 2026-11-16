@@ -55,12 +55,18 @@ class PlaybackService : MediaSessionService() {
     speech = DeviceSpeechFiles(this)
     player = ExoPlayer.Builder(this)
       .setLoadControl(DefaultLoadControl.Builder().setBufferDurationsMs(15000, 30000, 1000, 1500).build())
+      // Explicitly enable Media3's internal progress checks. They compare the
+      // renderer/load positions, not the UI timer, and respect playback pauses.
+      .setStuckPlayingDetectionTimeoutMs(10000)
+      .setStuckPlayingNotEndingTimeoutMs(10000)
+      .setStuckBufferingDetectionTimeoutMs(90000)
       .build().apply {
         setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_SPEECH).build(), true)
         setHandleAudioBecomingNoisy(true)
         setWakeMode(C.WAKE_MODE_NETWORK)
         addListener(object : Player.Listener {
           override fun onMediaItemTransition(item: MediaItem?, reason: Int) {
+            Log.i("Narration", "transition version=${BuildConfig.VERSION_NAME} index=${player.currentMediaItemIndex} reason=$reason")
             appendUpcoming()
             publish()
           }
@@ -200,6 +206,9 @@ class PlaybackService : MediaSessionService() {
     val row = book.rows[index]
     val duration = player.duration.takeIf { it != C.TIME_UNSET && it > 0 } ?: 0
     NarrationState.publish(JSONObject().put("bookId", book.bookId).put("sentenceId", row.id)
+      .put("appVersion", BuildConfig.VERSION_NAME).put("playerState", player.playbackState)
+      .put("isPlaying", player.isPlaying).put("suppressionReason", player.playbackSuppressionReason)
+      .put("bufferedPositionMs", player.bufferedPosition)
       .put("index", index).put("pageNumber", row.pageNumber).put("queueLength", book.rows.size)
       .put("positionMs", player.currentPosition).put("durationMs", duration)
       .put("speed", player.playbackParameters.speed).put("playing", player.playWhenReady && player.playbackState != Player.STATE_ENDED && (error == null || retryTask != null || player.playbackState == Player.STATE_BUFFERING))
