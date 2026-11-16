@@ -9,6 +9,8 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
+import androidx.test.uiautomator.By
+import androidx.test.uiautomator.Until
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -21,19 +23,20 @@ class NavigationTest {
   @Test fun systemBackReturnsToPreviousWebPage() {
     val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
     device.wakeUp()
+    device.executeShellCommand("wm dismiss-keyguard")
     ActivityScenario.launch(MainActivity::class.java).use { scenario ->
       scenario.onActivity { activity ->
         val web = view(activity)
         web.stopLoading()
         val productionClient = web.webViewClient
-        // Use a real HTTPS navigation with a local response. loadDataWithBaseURL
-        // does not create normal pushState/back history on all WebView versions.
-        // Delegate production history callbacks so this tests the actual Back handler.
+        // Keep the HTTPS page local, but retain the production history callbacks.
         web.webViewClient = object : WebViewClient() {
           override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
             if (request.url.host == "korealib.com" && request.url.path?.startsWith("/__navigation_fixture__") == true) {
               return WebResourceResponse("text/html", "UTF-8", ByteArrayInputStream(
-                "<html><body id='nav-fixture'>Navigation test</body></html>".toByteArray()))
+                """<html><body id='nav-fixture'>
+                  <button style="font-size:32px;padding:32px" onclick="history.pushState({}, '', '/__navigation_fixture__/reader')">Open reader</button>
+                </body></html>""".toByteArray()))
             }
             return productionClient.shouldInterceptRequest(view, request)
           }
@@ -54,9 +57,10 @@ class NavigationTest {
         }
         fixtureReady.get()
       }
-      scenario.onActivity {
-        view(it).evaluateJavascript("history.pushState({}, '', '/__navigation_fixture__/reader');", null)
-      }
+      // Chromium deliberately skips history created without user activation.
+      // Tap as a reader would; evaluateJavascript(pushState) is not a user gesture.
+      assertTrue(device.wait(Until.hasObject(By.text("Open reader")), 10000))
+      device.findObject(By.text("Open reader")).click()
       await(10000) {
         var ready = false
         scenario.onActivity { ready = view(it).url?.endsWith("/__navigation_fixture__/reader") == true && view(it).canGoBack() }
