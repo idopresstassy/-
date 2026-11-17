@@ -4,14 +4,23 @@ import type { ReaderAudioLayout, ReaderAudioSentence } from "./readerAudioText";
 export class ReaderAudioPosition {
   private active: { row: ReaderAudioSentence; progress: number } | null = null;
   private layouts = new WeakMap<ReaderAudioSentence, ReaderAudioLayout>();
+  private followAudio = true;
 
   constructor(
     private measure: (row: ReaderAudioSentence) => ReaderAudioLayout | null,
     private onPage: (row: ReaderAudioSentence, page: number) => void,
   ) {}
 
+  get following() { return this.followAudio; }
+
+  /** A reader's explicit page choice takes priority over native status ticks. */
+  browse() { this.followAudio = false; }
+
+  follow() { this.followAudio = true; }
+
   update(row: ReaderAudioSentence, progress: number) {
     this.active = { row, progress };
+    if (!this.followAudio) return;
     let layout = this.layouts.get(row);
     if (!layout) {
       layout = this.measure(row) ?? undefined;
@@ -31,5 +40,6 @@ export class ReaderAudioPosition {
   reset() {
     this.active = null;
     this.layouts = new WeakMap();
+    this.followAudio = true;
   }
 }

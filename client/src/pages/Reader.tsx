@@ -490,15 +490,6 @@ export default function Reader() {
     setHasRestoredProgress(true);
   }, [savedProgress, savedProgressLoading, user, authLoading, totalPages, stride, hasRestoredProgress]);
 
-  // Navigation
-  const nextPage = useCallback(() => {
-    setCurrentPage((prev) => (prev < totalPages - 1 ? prev + 1 : prev));
-  }, [totalPages]);
-
-  const prevPage = useCallback(() => {
-    setCurrentPage((prev) => (prev > 0 ? prev - 1 : prev));
-  }, []);
-
   // The controller reads current layout/configuration through refs, but never
   // waits for a React render to advance the media queue.
   const audioRuntimeRef = useRef({ bookId, totalPages, stride, audioSpeed, audioProgressKey, readMode,
@@ -528,6 +519,25 @@ export default function Reader() {
     audioPosition.reflow();
   }, [audioPosition, fontSize, lineHeight, columnDimensions, containerWidth,
     stride, readMode, isEinkMode, lines]);
+
+  const browsePausedAudio = useCallback(() => {
+    if (!audioPlayerRef.current?.playing) {
+      audioPosition.browse();
+      setAudioRequest(null);
+    }
+  }, [audioPosition]);
+
+  const nextPage = useCallback(() => {
+    if (currentPage >= totalPages - 1) return;
+    browsePausedAudio();
+    setCurrentPage((prev) => Math.min(prev + 1, totalPages - 1));
+  }, [currentPage, totalPages, browsePausedAudio]);
+
+  const prevPage = useCallback(() => {
+    if (currentPage <= 0) return;
+    browsePausedAudio();
+    setCurrentPage((prev) => Math.max(0, prev - 1));
+  }, [currentPage, browsePausedAudio]);
 
   const getAudioPlayer = useCallback(() => {
     if (audioPlayerRef.current) return audioPlayerRef.current;
@@ -591,11 +601,13 @@ export default function Reader() {
   const requestAudioPage = useCallback((page: number, sentenceId: number | null = null) => {
     const safePage = Math.max(0, Math.min(page, totalPages - 1));
     audioPlayerRef.current?.pause();
+    // Ignore old native snapshots while the chosen page is being prepared.
+    audioPosition.browse();
     setReadMode("page");
     setCurrentPage(safePage);
     setAudioPlaybackError(null);
     setAudioRequest({ page: safePage, sentenceId, nonce: Date.now() });
-  }, [totalPages]);
+  }, [totalPages, audioPosition]);
 
   const startAudioFromSentence = useCallback((sentenceId: number) => {
     if (readMode === "scroll") {
@@ -617,6 +629,7 @@ export default function Reader() {
   }, []);
 
   const retryAudioNarrator = useCallback(() => {
+    if (!audioPosition.following) { requestAudioPage(currentPage); return; }
     const player = getAudioPlayer();
     if (!player) return;
     retrySelectedNarrator(player, () => {
@@ -629,11 +642,12 @@ export default function Reader() {
       preloadedAudioRef.current.clear();
       setAudioPlaybackError(null);
     });
-  }, [getAudioPlayer]);
+  }, [getAudioPlayer, audioPosition, requestAudioPage, currentPage]);
 
   const toggleAudioPlayback = useCallback(() => {
     const player = getAudioPlayer();
-    if (player?.playing) { pauseAudio(); return; }
+    if (player?.playing || audioRequest || isAudioLoading) { pauseAudio(); return; }
+    if (!audioPosition.following) { requestAudioPage(currentPage); return; }
     if (player?.cursor) {
       if (audioUsesBrowserVoice) retryAudioNarrator();
       else player.resume();
@@ -643,15 +657,16 @@ export default function Reader() {
     try { saved = JSON.parse(localStorage.getItem(audioProgressKey) || "{}"); } catch { /* Start from the current page. */ }
     requestAudioPage(Number.isInteger(saved.page) ? Number(saved.page) : currentPage,
       Number.isInteger(saved.sentenceId) ? Number(saved.sentenceId) : null);
-  }, [getAudioPlayer, pauseAudio, audioProgressKey, requestAudioPage, currentPage, audioUsesBrowserVoice, retryAudioNarrator]);
+  }, [getAudioPlayer, pauseAudio, audioProgressKey, requestAudioPage, currentPage, audioUsesBrowserVoice, retryAudioNarrator, audioPosition, audioRequest, isAudioLoading]);
 
   const skipAudioSentence = useCallback((direction: -1 | 1) => {
     const player = getAudioPlayer();
     const cursor = player?.cursor;
     if (!cursor) { requestAudioPage(currentPage); return; }
+    audioPosition.follow();
     if (player?.skip(direction)) return;
     if (cursor.batch.page > 0) requestAudioPage(cursor.batch.page - 1, -1);
-  }, [getAudioPlayer, currentPage, requestAudioPage]);
+  }, [getAudioPlayer, currentPage, requestAudioPage, audioPosition]);
 
   // Expose narration controls to Android Chrome's lock-screen media session.
   // This lets the browser keep the audio session active while the display is off.
@@ -710,9 +725,10 @@ export default function Reader() {
       const found = audioRequest.sentenceId === null ? 0 : rows.findIndex((row) => row.id === audioRequest.sentenceId);
       const index = audioRequest.sentenceId === -1 ? Math.max(0, rows.length - 1) : Math.max(0, found);
       setAudioRequest(null);
+      audioPosition.reset();
       getAudioPlayer()?.start({ page: audioRequest.page, rows }, index);
     });
-  }, [audioRequest, currentPage, stride, isReady, getAudioPlayer]);
+  }, [audioRequest, currentPage, stride, isReady, getAudioPlayer, audioPosition]);
 
   useEffect(() => () => {
     audioPosition.reset();
@@ -742,6 +758,7 @@ export default function Reader() {
 
   // 차례 항목 클릭 시 정확한 페이지로 이동하는 함수
   const navigateToTocItem = useCallback((tocIdx: number) => {
+    browsePausedAudio();
     const lineIdx = tocLineIndices[tocIdx];
     if (lineIdx < 0 || !contentRef.current || stride === 0) {
       // 매칭 실패 시 비율 기반 폴백
@@ -762,7 +779,7 @@ export default function Reader() {
       const fallbackPage = Math.floor((lineIdx / lines.length) * totalPages);
       setCurrentPage(Math.min(fallbackPage, totalPages - 1));
     }
-  }, [tocLineIndices, tocItems.length, totalPages, stride, lines.length]);
+  }, [tocLineIndices, tocItems.length, totalPages, stride, lines.length, browsePausedAudio]);
 
   // Bookmark toggle
   const isCurrentPageBookmarked = useMemo(() => {
@@ -848,6 +865,7 @@ export default function Reader() {
   }
 
   const displayTitle = book?.title || offlineBook?.title || "";
+  const audioPending = audioRequest !== null || isAudioLoading;
 
   return (
     <div
@@ -877,10 +895,10 @@ export default function Reader() {
           <button
             onClick={toggleAudioPlayback}
             className={`p-2 hover:bg-black/5 rounded-full transition-colors ${isAudioPlaying ? "text-amber-600" : ""}`}
-            title={isAudioPlaying ? "낭독 일시정지" : "낭독 시작"}
-            aria-label={isAudioPlaying ? "낭독 일시정지" : "낭독 시작"}
+            title={audioPending ? "음성 불러오기 취소" : isAudioPlaying ? "낭독 일시정지" : "낭독 시작"}
+            aria-label={audioPending ? "음성 불러오기 취소" : isAudioPlaying ? "낭독 일시정지" : "낭독 시작"}
           >
-            {isAudioPlaying ? <Pause className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+            {audioPending ? <Loader2 className="w-5 h-5 animate-spin" /> : isAudioPlaying ? <Pause className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
           </button>
           {tocItems.length > 0 && (
             <button
@@ -939,6 +957,18 @@ export default function Reader() {
         </div>
       </header>
       <audio ref={audioElementRef} preload="none" className="hidden" />
+
+      {audioPending && (
+        <div className="absolute top-16 inset-x-4 z-50 flex justify-center pointer-events-none">
+          <div role="status" aria-live="polite" aria-atomic="true"
+            className={`flex items-center gap-3 rounded-xl border px-5 py-3 shadow-lg ${theme === "dark"
+              ? "bg-gray-800 border-gray-700 text-gray-100"
+              : "bg-white border-amber-200 text-gray-900"}`}>
+            <Loader2 aria-hidden="true" className="h-5 w-5 shrink-0 animate-spin text-amber-600" />
+            <span className="text-sm font-medium">음성 불러오는 중…</span>
+          </div>
+        </div>
+      )}
 
       {/* TOC Panel */}
       <AnimatePresence>
@@ -1112,11 +1142,11 @@ export default function Reader() {
                   </button>
                   <button
                     onClick={toggleAudioPlayback}
-                    disabled={isAudioLoading && !isAudioPlaying}
+                    aria-label={audioPending ? "음성 불러오기 취소" : isAudioPlaying ? "낭독 일시정지" : "낭독 시작"}
                     className="flex flex-1 items-center justify-center gap-2 rounded-full bg-amber-600 px-3 py-2 text-white text-sm disabled:opacity-50"
                   >
-                    {isAudioLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : isAudioPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                    {isAudioLoading ? "준비 중" : isAudioPlaying ? "일시정지" : "듣기"}
+                    {audioPending ? <Loader2 className="w-4 h-4 animate-spin" /> : isAudioPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                    {audioPending ? "불러오기 취소" : isAudioPlaying ? "일시정지" : "듣기"}
                   </button>
                   <button onClick={() => skipAudioSentence(1)} className="p-2 rounded hover:bg-black/5" title="다음 문단" aria-label="다음 문단">
                     <SkipForward className="w-5 h-5" />
