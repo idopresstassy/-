@@ -10,6 +10,7 @@ import Admin from "./pages/Admin";
 import Bookshelf from "./pages/Bookshelf";
 import Creative from "./pages/Creative";
 import Login from "./pages/Login";
+import Privacy from "./pages/Privacy";
 import ResetPassword from "./pages/ResetPassword";
 import { trpc } from "@/lib/trpc";
 import { useEffect, useRef, useState } from "react";
@@ -25,6 +26,7 @@ function Router() {
       <Route path={"/creative"} component={Creative} />
       <Route path={"/login"} component={Login} />
       <Route path={"/reset-password"} component={ResetPassword} />
+      <Route path={"/privacy"} component={Privacy} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>
