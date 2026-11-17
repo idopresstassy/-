@@ -2,7 +2,7 @@ import { useEffect, type ReactNode } from "react";
 import { Link } from "wouter";
 import { BRAND_LOGO_URL } from "@/lib/brand";
 
-const CONTACT_EMAIL = "tassy@naver.com";
+const CONTACT_EMAIL = "idopublishingcompan@gmail.com";
 
 function PolicySection({
   number,
@@ -315,7 +315,7 @@ export default function Privacy() {
             <PolicyList
               items={[
                 "이용자는 언제든지 자신의 개인정보를 조회하거나 정정하고, 삭제 또는 처리 정지를 요청할 수 있습니다.",
-                "요청은 이메일(tassy@naver.com)로 하실 수 있으며, 본인 확인 후 지체 없이 처리하고 결과를 알려 드립니다.",
+                `요청은 이메일(${CONTACT_EMAIL})로 하실 수 있으며, 본인 확인 후 지체 없이 처리하고 결과를 알려 드립니다.`,
                 "회원 탈퇴와 정보 삭제는 위 이메일로 요청하실 수 있습니다. 앱을 삭제하더라도 계정이 자동으로 삭제되지는 않습니다.",
                 "비밀번호는 로그인 화면의 ‘비밀번호를 잊으셨나요?’를 통해 등록한 이메일로 재설정할 수 있습니다.",
                 "법정대리인이나 위임을 받은 대리인도 같은 방법으로 권리를 행사할 수 있습니다.",
