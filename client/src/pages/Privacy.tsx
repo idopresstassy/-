@@ -42,6 +42,8 @@ export default function Privacy() {
     document.title = "개인정보처리방침 | 명작무료책방";
     if (window.location.hash === "#account-deletion") {
       document.getElementById("account-deletion")?.scrollIntoView();
+    } else {
+      window.scrollTo(0, 0);
     }
     return () => {
       document.title = previousTitle;
