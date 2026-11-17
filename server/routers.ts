@@ -2,6 +2,7 @@ import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import * as db from "./supabaseDb";
+import { creativeManuscriptTargetSchema, updateCreativeManuscriptSchema } from "../shared/creativeEditing";
 import { deleteBookAudioCache, deleteLegacyBookAudioCache, getBookAudioMonthlyUsage, getLegacyBookAudioCachePreview, getOrCreateBookSentenceAudio, listBookAudioCache } from "./bookAudio";
 
 export const appRouter = router({
@@ -263,6 +264,14 @@ export const appRouter = router({
     }),
 
     creativeBooks: adminProcedure.query(() => db.getManagedCreativeBooks()),
+
+    creativeManuscript: adminProcedure
+      .input(creativeManuscriptTargetSchema)
+      .query(({ input }) => db.getManagedCreativeManuscript(input)),
+
+    updateCreativeManuscript: adminProcedure
+      .input(updateCreativeManuscriptSchema)
+      .mutation(({ input }) => db.updateManagedCreativeManuscript(input)),
 
     setCreativeVisibility: adminProcedure
       .input(z.object({ id: z.number().int().positive(), isPublic: z.boolean(), note: z.string().trim().min(1).max(2000) }))
