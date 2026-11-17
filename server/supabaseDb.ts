@@ -1,4 +1,6 @@
 import { getSupabaseAdmin } from "./supabase";
+import { TRPCError } from "@trpc/server";
+import type { CreativeManuscript, CreativeManuscriptTarget, CreativeManuscriptUpdate } from "../shared/creativeEditing";
 
 import type { CreativeGenre } from "../shared/creative";
 
@@ -154,6 +156,44 @@ export async function getManagedCreativeBooks() {
   const { data, error } = await getSupabaseAdmin().from("books")
     .select("id,title,author,is_public").eq("genre", "creative").order("created_at", { ascending: false });
   fail(error); return data ?? [];
+}
+
+export async function getManagedCreativeManuscript(target: CreativeManuscriptTarget): Promise<CreativeManuscript> {
+  const pending = target.kind === "submission";
+  const { data, error } = await getSupabaseAdmin()
+    .from(pending ? "creative_submissions" : "books")
+    .select(pending
+      ? "title,author_name,genre,description,content,updated_at"
+      : "title,author,creative_genre,description,content,updated_at,is_public")
+    .eq("id", target.id).eq(pending ? "status" : "genre", pending ? "pending" : "creative")
+    .maybeSingle();
+  fail(error);
+  if (!data) throw new TRPCError({ code: "NOT_FOUND", message: "수정할 원고를 찾을 수 없거나 이미 검수가 끝났습니다. 목록을 새로 불러와 주세요." });
+  const row = data as unknown as Record<string, any>;
+  return {
+    title: row.title, authorName: pending ? row.author_name : row.author,
+    genre: pending ? row.genre : row.creative_genre,
+    description: row.description ?? "", content: row.content ?? "",
+    updatedAt: row.updated_at, isPublic: pending ? false : row.is_public,
+  };
+}
+
+export async function updateManagedCreativeManuscript(input: CreativeManuscriptUpdate) {
+  const pending = input.kind === "submission";
+  // One conditional UPDATE prevents overwriting a concurrent edit or review.
+  // Only manuscript fields change; ownership, review status and visibility stay intact.
+  const { data, error } = await getSupabaseAdmin()
+    .from(pending ? "creative_submissions" : "books")
+    .update({
+      title: input.title, description: input.description || null, content: input.content,
+      ...(pending ? { author_name: input.authorName, genre: input.genre }
+        : { author: input.authorName, creative_genre: input.genre }),
+    })
+    .eq("id", input.id).eq(pending ? "status" : "genre", pending ? "pending" : "creative")
+    .eq("updated_at", input.expectedUpdatedAt).select("id").maybeSingle();
+  fail(error);
+  if (!data) throw new TRPCError({ code: "CONFLICT", message: "다른 곳에서 원고나 공개 상태가 변경되었습니다. 수정 내용을 복사해 둔 뒤 창을 다시 열어 주세요." });
+  return { success: true as const };
 }
 
 export async function setCreativeBookVisibility(id: number, isPublic: boolean, reviewerId: UserId, note: string) {

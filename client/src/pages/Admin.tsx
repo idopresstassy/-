@@ -1,6 +1,8 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import CreativeManuscriptEditor from "@/components/CreativeManuscriptEditor";
+import type { CreativeManuscriptTarget } from "@shared/creativeEditing";
 import { trpc } from "@/lib/trpc";
 import { supabase } from "@/lib/supabase";
 import { getLoginUrl } from "@/const";
@@ -670,6 +672,7 @@ function BooksTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> }) {
 
 // ==================== CREATIVE REVIEW TAB ====================
 function CreativeReviewTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> }) {
+  const [editingManuscript, setEditingManuscript] = useState<CreativeManuscriptTarget | null>(null);
   const { data: submissions, isLoading, isError, refetch } = trpc.admin.creativeSubmissions.useQuery();
   const managed = trpc.admin.creativeBooks.useQuery();
   const visibility = trpc.admin.setCreativeVisibility.useMutation({
@@ -725,9 +728,14 @@ function CreativeReviewTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> 
                 <p className="mt-1 text-sm text-muted-foreground">작가명: {submission.authorName} · 제출자: {submission.submitterName || "회원"}{submission.submitterEmail ? ` (${submission.submitterEmail})` : ""}</p>
                 <p className="mt-1 text-xs text-muted-foreground">접수: {submission.createdAt.toLocaleString("ko-KR")}</p>
               </div>
-              <Button size="sm" onClick={() => handleApprove(submission.id, submission.title)} disabled={approve.isPending || reject.isPending}>
-                <Check className="mr-1 h-4 w-4" /> 승인하고 공개
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" onClick={() => setEditingManuscript({ kind: "submission", id: submission.id })} disabled={approve.isPending || reject.isPending}>
+                  <Edit className="mr-1 h-4 w-4" /> 원고 수정
+                </Button>
+                <Button size="sm" onClick={() => handleApprove(submission.id, submission.title)} disabled={approve.isPending || reject.isPending}>
+                  <Check className="mr-1 h-4 w-4" /> 승인하고 공개
+                </Button>
+              </div>
             </div>
             {submission.description && <p className="mt-4 rounded-lg bg-secondary/40 p-3 text-sm">{submission.description}</p>}
             <details className="mt-4 rounded-lg border border-border">
@@ -753,13 +761,29 @@ function CreativeReviewTab({ utils }: { utils: ReturnType<typeof trpc.useUtils> 
         {managed.data?.length === 0 && <p>게시한 창작 작품이 없습니다.</p>}
         {managed.data?.map(item => <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 border-t pt-3">
           <div><strong>{item.title}</strong> · {item.author}<span className="ml-2 text-sm">{item.is_public ? "공개 중" : "게시 중단"}</span></div>
+          <div className="flex flex-wrap gap-2">
+          <Button variant="outline" disabled={visibility.isPending} onClick={() => setEditingManuscript({ kind: "book", id: Number(item.id) })}><Edit className="mr-1 h-4 w-4" /> 원고 수정</Button>
           <Button variant="outline" disabled={visibility.isPending} onClick={() => {
             const note = window.prompt(`${item.is_public ? "게시 중단" : "다시 공개"} 이유를 적어주세요. 원고는 삭제되지 않습니다.`);
             if (!note?.trim()) return;
             visibility.mutate({id: Number(item.id), isPublic: !item.is_public, note: note.trim()});
           }}>{item.is_public ? "게시 중단" : "다시 공개"}</Button>
+          </div>
         </div>)}
       </div>
+      {editingManuscript && <CreativeManuscriptEditor
+        key={`${editingManuscript.kind}:${editingManuscript.id}`}
+        target={editingManuscript}
+        onClose={() => setEditingManuscript(null)}
+        onSaved={() => {
+          setEditingManuscript(null);
+          toast.success("원고 수정 내용을 저장했습니다.");
+          void Promise.all([
+            utils.admin.creativeSubmissions.invalidate(), utils.admin.creativeBooks.invalidate(),
+            utils.admin.creativeManuscript.invalidate(), utils.books.invalidate(), utils.creative.mine.invalidate(),
+          ]).catch(() => toast.warning("저장은 완료했습니다. 목록을 새로고침해 주세요."));
+        }}
+      />}
     </section>
   );
 }

@@ -129,3 +129,71 @@ describe("creative access boundaries", () => {
     });
   });
 });
+
+describe("administrator manuscript editing", () => {
+  const version = "2026-11-17T11:12:13.123456+00:00";
+  const edit = {
+    kind: "submission" as const, id: 9, expectedUpdatedAt: version,
+    title: "수정한 원고", authorName: "필명", genre: "short_story" as const,
+    description: "", content: "원고 내용을 수정해 저장합니다. 줄바꿈도 유지합니다.\n다음 문단입니다.",
+  };
+
+  it.each([null, "user"] as const)("blocks reading and editing manuscripts for %s", async role => {
+    await expect(caller(role).admin.creativeManuscript({ kind: "submission", id: 9 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller(role).admin.updateCreativeManuscript(edit)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(mocks.from).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { title: "   " }, { authorName: " " }, { content: "\n " },
+    { content: "가".repeat(500001) }, { genre: "classic" }, { expectedUpdatedAt: "invalid" },
+  ])("rejects invalid edits before writing: %j", async changes => {
+    await expect(caller("admin").admin.updateCreativeManuscript({ ...edit, ...changes } as any)).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(mocks.from).not.toHaveBeenCalled();
+  });
+
+  it("retains exact timestamp precision and restricts the editor to pending manuscripts", async () => {
+    const q = query({ data: { title: "초고", author_name: "필명", genre: "fantasy", content: edit.content, description: null, updated_at: version }, error: null });
+    mocks.from.mockReturnValue(q);
+    const result = await caller("admin").admin.creativeManuscript({ kind: "submission", id: 9 });
+    expect(result).toMatchObject({ updatedAt: version, description: "", authorName: "필명", isPublic: false });
+    expect(q.eq).toHaveBeenCalledWith("status", "pending");
+  });
+
+  it("saves manuscript text without granting publication or changing ownership", async () => {
+    const q = query({ data: { id: 9 }, error: null });
+    mocks.from.mockReturnValue(q);
+    await caller("admin").admin.updateCreativeManuscript({ ...edit, status: "approved", userId: "other", isPublic: true } as any);
+    expect(q.update).toHaveBeenCalledWith({ title: edit.title, author_name: edit.authorName, genre: edit.genre, description: null, content: edit.content });
+    expect(q.eq).toHaveBeenCalledWith("status", "pending");
+    expect(q.eq).toHaveBeenCalledWith("updated_at", version);
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+
+  it("updates only the selected creative book, retaining hidden state and book identity", async () => {
+    const q = query({ data: { id: 9 }, error: null });
+    mocks.from.mockReturnValue(q);
+    await caller("admin").admin.updateCreativeManuscript({ ...edit, kind: "book" });
+    expect(mocks.from).toHaveBeenCalledWith("books");
+    expect(q.eq.mock.calls).toEqual([["id", 9], ["genre", "creative"], ["updated_at", version]]);
+    expect(q.update).toHaveBeenCalledWith({ title: edit.title, author: edit.authorName, creative_genre: edit.genre, description: null, content: edit.content });
+    expect(mocks.from).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["submission", "book"] as const)("reports a concurrent change instead of false success for %s", async kind => {
+    mocks.from.mockReturnValue(query({ data: null, error: null }));
+    await expect(caller("admin").admin.updateCreativeManuscript({ ...edit, kind })).rejects.toMatchObject({ code: "CONFLICT" });
+  });
+
+  it("does not open non-creative or already-reviewed originals for editing", async () => {
+    const q = query({ data: null, error: null });
+    mocks.from.mockReturnValue(q);
+    await expect(caller("admin").admin.creativeManuscript({ kind: "book", id: 1 })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(q.eq).toHaveBeenCalledWith("genre", "creative");
+  });
+
+  it("surfaces storage failures instead of reporting a saved edit", async () => {
+    mocks.from.mockReturnValue(query({ data: null, error: new Error("storage unavailable") }));
+    await expect(caller("admin").admin.updateCreativeManuscript(edit)).rejects.toThrow("storage unavailable");
+  });
+});
