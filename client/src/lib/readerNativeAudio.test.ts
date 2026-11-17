@@ -24,6 +24,17 @@ function setup() {
 }
 afterEach(() => vi.unstubAllGlobals());
 describe("native narration handover", () => {
+  it("immediately cancels loading on pause while retaining the selected clip and voice", () => {
+    const s = setup();
+    s.snapshot({ loading: true, deviceVoice: true });
+    s.player.pause();
+    expect(s.player.playing).toBe(false);
+    expect(s.player.cursor?.batch.rows[0].id).toBe(2);
+    expect(s.options.onState).toHaveBeenLastCalledWith({ playing: false, loading: false, browserVoice: true, error: null });
+    expect(JSON.parse(s.bridge.postMessage.mock.lastCall![0]).action).toBe("pause");
+    s.player.dispose();
+  });
+
   it("sends remaining text once, including a partial first paragraph, without synthesizing the book", () => {
     const s = setup();
     s.player.setSpeed(0.8);

@@ -26,6 +26,7 @@ export class NativeReaderAudioPlayback {
   private rows: ReaderAudioSentence[] = [];
   private current: ReaderAudioBatch | null = null;
   private isPlaying = false;
+  private lastState: ReaderAudioPlaybackState = { playing: false, loading: false, browserVoice: false, error: null };
   private speed = 0.8;
   private disposed = false;
   private listener = (event: Event) => this.receive((event as CustomEvent<NativeNarrationSnapshot>).detail);
@@ -38,6 +39,11 @@ export class NativeReaderAudioPlayback {
   get playing() { return this.isPlaying; }
   get cursor() { return this.current ? { batch: this.current, index: 0 } : null; }
   private send(action: string, extra: object = {}) { this.bridge.postMessage(JSON.stringify({ action, ...extra })); }
+  private notify(state: ReaderAudioPlaybackState) {
+    this.lastState = state;
+    this.isPlaying = state.playing;
+    this.options.onState(state);
+  }
   private requestState = () => { if (!document.hidden) this.send("state"); };
 
   start(batch: ReaderAudioBatch, index = 0) {
@@ -48,11 +54,15 @@ export class NativeReaderAudioPlayback {
     this.current = { page: batch.page, rows: [first[0]] };
     this.isPlaying = true;
     this.options.onCursor(this.current, 0);
-    this.options.onState({ playing: true, loading: true, browserVoice: false, error: null });
+    this.notify({ playing: true, loading: true, browserVoice: false, error: null });
     this.send("start", { bookId: this.options.bookId, title: this.options.title(), speed: this.speed,
       rows: this.rows.map(({ id, text, pageNumber, sentenceNumber }) => ({ id, text, pageNumber, sentenceNumber })) });
   }
-  pause() { this.send("pause"); }
+  pause() {
+    // Page navigation can happen before the service acknowledges the pause.
+    this.notify({ ...this.lastState, playing: false, loading: false });
+    this.send("pause");
+  }
   resume() { this.send("resume"); }
   setSpeed(speed: number) { this.speed = speed; if (this.current) this.send("speed", { speed }); }
   skip(direction: -1 | 1) {
@@ -77,7 +87,7 @@ export class NativeReaderAudioPlayback {
     if (state.durationMs > 0) this.options.onProgress(row, Math.min(1, state.positionMs / state.durationMs));
     this.isPlaying = state.playing;
     if (state.finished) this.current = null;
-    this.options.onState({ playing: state.playing, loading: state.loading, browserVoice: state.deviceVoice, error: state.error });
+    this.notify({ playing: state.playing, loading: state.loading, browserVoice: state.deviceVoice, error: state.error });
   }
   dispose() {
     this.disposed = true;

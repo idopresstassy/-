@@ -35,6 +35,52 @@ async function settle() { for (let i = 0; i < 8; ++i) await Promise.resolve(); }
 afterEach(() => vi.unstubAllGlobals());
 
 describe("audio position after line spacing/font size reflow", () => {
+  it("keeps a manually chosen page through paused native heartbeats and layout changes", () => {
+    const pages = [2, 2, 3, 3];
+    const f = fixture([{ id: 0, text: "가나다라", pages }, { id: 1, text: "앞문단", pages: [0, 0, 0] }]);
+    const rows = [row(0, "가나다라", 3), row(1, "앞문단")];
+    const bridge = { postMessage: vi.fn() };
+    const player = new NativeReaderAudioPlayback(bridge, { bookId: 90003, title: () => "돈", allRows: () => rows,
+      onState: () => {}, onCursor: (batch, index) => f.position.update(batch.rows[index], 0),
+      onProgress: (item, progress) => f.position.update(item, progress),
+    });
+    const snapshot = (playing = false) => window.dispatchEvent(Object.assign(new Event("myeongjak-audio-state"), {
+      detail: { bookId: 90003, sentenceId: 0, index: 0, positionMs: 600, durationMs: 1000,
+        playing, loading: false, finished: false, deviceVoice: false, error: null },
+    }));
+    player.start({ page: 2, rows: [rows[0]] });
+    snapshot(true);
+    expect(f.onPage).toHaveBeenLastCalledWith(rows[0], 3);
+    player.pause();
+    expect(player.playing).toBe(false); // before the service acknowledges the pause
+    f.position.browse(); // reader chooses page 0
+    f.onPage.mockClear();
+    snapshot(true); // an already queued old status must not steal the chosen page
+    snapshot();
+    snapshot();
+    pages.fill(5);
+    f.position.reflow();
+    expect(f.onPage).not.toHaveBeenCalled();
+    expect(f.position.following).toBe(false);
+    f.position.reset(); // listen from the manually chosen page
+    player.start({ page: 0, rows: [rows[1]] });
+    expect(f.onPage).toHaveBeenLastCalledWith(rows[1], 0);
+    expect(JSON.parse(bridge.postMessage.mock.lastCall![0]).rows[0].text).toBe("앞문단");
+    player.dispose();
+  });
+
+  it("resumes page following for an explicit audio skip after browsing", () => {
+    const f = fixture([{ id: 0, text: "가나다라", pages: [0, 0, 1, 1] }]);
+    const clip = row(0, "가나다라");
+    f.position.update(clip, 0);
+    f.position.browse();
+    f.position.update(clip, 0.8);
+    expect(f.onPage).toHaveBeenCalledTimes(1);
+    f.position.follow();
+    f.position.update(clip, 0.8);
+    expect(f.onPage).toHaveBeenLastCalledWith(clip, 1);
+  });
+
   it("follows the same playing text forward AND backward, ignoring stale queue pages", () => {
     const pages = [0, 0, 1, 1, 1, 2];
     const f = fixture([{ id: 4, text: "가나다라마바", pages }]);
