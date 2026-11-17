@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { SUPABASE_PASSWORD_RESET_ROUTE } from "@/lib/authNavigation";
 
@@ -46,6 +46,7 @@ export default function Login() {
           {mode === "signin" ? "처음 방문하셨나요? 회원가입" : "이미 계정이 있나요? 로그인"}
         </button>
         {mode === "signin" && <button className="mt-3 block text-sm text-stone-600 underline" onClick={() => navigate(SUPABASE_PASSWORD_RESET_ROUTE)}>비밀번호를 잊으셨나요?</button>}
+        <Link href="/privacy" className="mt-6 block text-center text-xs text-stone-500 underline">개인정보처리방침</Link>
       </section>
     </main>
   );

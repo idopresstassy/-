@@ -292,6 +292,18 @@ export default function Home() {
         </div>
       )}
 
+      {/* Footer */}
+      <footer className="border-t border-border bg-card">
+        <div className="container flex flex-col items-center gap-1 py-6 text-center text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
+            <Link href="/privacy" className="underline hover:text-foreground">개인정보처리방침</Link>
+            <Link href="/privacy#account-deletion" className="underline hover:text-foreground">회원 탈퇴·정보 삭제</Link>
+            <a href="mailto:tassy@naver.com" className="underline hover:text-foreground">문의 tassy@naver.com</a>
+          </div>
+          <p>© 이도 출판 · 명작무료책방</p>
+        </div>
+      </footer>
+
     </div>
   );
 }
