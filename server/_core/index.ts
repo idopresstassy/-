@@ -47,6 +47,11 @@ async function startServer() {
       res.status(503).type("text/plain").send("Sitemap temporarily unavailable");
     }
   });
+  app.use("/auth/callback", (_req, res, next) => {
+    res.setHeader("Cache-Control", "private, no-store");
+    res.setHeader("Referrer-Policy", "no-referrer");
+    next();
+  });
   registerUploadRoutes(app);
   // tRPC API
   app.use(

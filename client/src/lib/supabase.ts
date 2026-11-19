@@ -1,7 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 
-const url = import.meta.env.VITE_SUPABASE_URL;
-const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+export const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+export const supabasePublicKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const url = supabaseUrl;
+const anonKey = supabasePublicKey;
 
 if (!url || !anonKey) {
   console.warn("Supabase browser environment variables are not configured.");

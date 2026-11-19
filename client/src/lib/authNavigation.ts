@@ -12,8 +12,32 @@ export function communityLoginReturn(next: string | null) {
   if (!next || /[\\\r\n]/.test(next)) return "/";
   try {
     const url = new URL(next, "https://korealib.com");
-    if (!next.startsWith("/community") || url.origin !== "https://korealib.com") return "/";
-    if (!/^\/community(?:\/(?:new|[0-9a-f-]{36}))?$/.test(url.pathname)) return "/";
+    if (!next.startsWith("/community") || url.origin !== "https://korealib.com")
+      return "/";
+    if (!/^\/community(?:\/(?:new|[0-9a-f-]{36}))?$/.test(url.pathname))
+      return "/";
     return url.pathname + url.search;
-  } catch { return "/"; }
+  } catch {
+    return "/";
+  }
+}
+
+/** Login may resume reading, a bookshelf or a community form, never an arbitrary URL. */
+export function loginReturn(next: string | null) {
+  if (!next || /[\\\r\n]/.test(next)) return "/";
+  try {
+    const url = new URL(next, "https://korealib.com");
+    if (!next.startsWith("/") || url.origin !== "https://korealib.com")
+      return "/";
+    if (/^\/read\/[1-9]\d*$/.test(url.pathname)) return url.pathname;
+    if (url.pathname === "/bookshelf" || url.pathname === "/creative")
+      return url.pathname;
+    return communityLoginReturn(next);
+  } catch {
+    return "/";
+  }
+}
+
+export function loginLink(next: string) {
+  return `${SUPABASE_LOGIN_ROUTE}?next=${encodeURIComponent(loginReturn(next))}`;
 }

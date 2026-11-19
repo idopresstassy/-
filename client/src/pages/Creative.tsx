@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { getSupabaseLoginRoute } from "@/lib/authNavigation";
+import { loginLink } from "@/lib/authNavigation";
 import { trpc } from "@/lib/trpc";
 import {
   CREATIVE_GENRES,
@@ -226,7 +226,7 @@ export default function Creative() {
             </p>
             <Button
               onClick={() =>
-                navigate(getSupabaseLoginRoute(navigator.userAgent))
+                navigate(loginLink("/creative"))
               }
             >
               회원가입 · 로그인
