@@ -33,6 +33,7 @@ import {
   Pause,
   SkipBack,
   SkipForward,
+  MessageSquare,
 } from "lucide-react";
 import { useOfflineCache } from "@/hooks/useOfflineCache";
 import { cleanReaderAudioText, collectPageAudioSentences, collectBookAudioSentences, collectFollowingAudioSentences, measureReaderAudioLayout, splitReaderParagraph, type ReaderAudioSentence } from "@/lib/readerAudioText";
@@ -1051,6 +1052,9 @@ export default function Reader() {
             }`}
           >
             <div className="space-y-6">
+              <button className="flex w-full items-center justify-center gap-2 rounded-lg border border-current/20 px-4 py-3 text-sm font-medium" onClick={() => { pauseAudio(); navigate(`/community/new?book=${bookId}`); }}>
+                <MessageSquare className="h-4 w-4" />이 책 문의하기
+              </button>
               {/* Theme */}
               <div>
                 <p className="text-xs font-bold mb-3 opacity-60 uppercase tracking-wider">

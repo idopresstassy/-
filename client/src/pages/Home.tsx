@@ -1,4 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import { CommunityNav } from "@/components/Community";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
@@ -67,6 +68,7 @@ export default function Home() {
                 <Library className="w-4 h-4 mr-1" /> 내 책장
               </Button>
             </Link>
+            <CommunityNav />
             <Button variant="ghost" size="sm" onClick={() => setShowDonation(true)}>
               <Heart className="w-4 h-4 mr-1" /> 후원
             </Button>

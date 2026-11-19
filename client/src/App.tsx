@@ -9,6 +9,7 @@ import Reader from "./pages/Reader";
 import Admin from "./pages/Admin";
 import Bookshelf from "./pages/Bookshelf";
 import Creative from "./pages/Creative";
+import CommunityPage, { CommunityNewPage, CommunityPostPage } from "./components/Community";
 import Login from "./pages/Login";
 import Privacy from "./pages/Privacy";
 import ResetPassword from "./pages/ResetPassword";
@@ -24,6 +25,9 @@ function Router() {
       <Route path={"/admin"} component={Admin} />
       <Route path={"/bookshelf"} component={Bookshelf} />
       <Route path={"/creative"} component={Creative} />
+      <Route path={"/community/new"} component={CommunityNewPage} />
+      <Route path={"/community/:id"} component={CommunityPostPage} />
+      <Route path={"/community"} component={CommunityPage} />
       <Route path={"/login"} component={Login} />
       <Route path={"/reset-password"} component={ResetPassword} />
       <Route path={"/privacy"} component={Privacy} />

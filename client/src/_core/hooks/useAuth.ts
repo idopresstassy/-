@@ -13,7 +13,7 @@ export function useAuth(options?: UseAuthOptions) {
     options ?? {};
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const meQuery = trpc.auth.me.useQuery(undefined, {
+  const meQuery = trpc.auth.me.useQuery({ viewerKey: session?.user?.id ?? "guest" }, {
     enabled: Boolean(session),
     retry: false,
     refetchOnWindowFocus: false,
@@ -30,12 +30,13 @@ export function useAuth(options?: UseAuthOptions) {
   }, []);
 
   const state = useMemo(() => {
+    const user = session?.user?.id === meQuery.data?.id ? meQuery.data ?? null : null;
     localStorage.setItem(
       "korealib-user-info",
-      JSON.stringify(meQuery.data ?? null)
+      JSON.stringify(user)
     );
     return {
-      user: meQuery.data ?? null,
+      user,
       loading: loading || (Boolean(session) && meQuery.isLoading),
       error: null,
       isAuthenticated: Boolean(session?.user),

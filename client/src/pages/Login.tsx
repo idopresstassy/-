@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
-import { SUPABASE_PASSWORD_RESET_ROUTE } from "@/lib/authNavigation";
+import { SUPABASE_PASSWORD_RESET_ROUTE, communityLoginReturn } from "@/lib/authNavigation";
 
 export default function Login() {
   const [, navigate] = useLocation();
@@ -27,7 +27,7 @@ export default function Login() {
       setMessage("인증 이메일을 보냈습니다. 이메일 확인 후 로그인해 주세요.");
       return;
     }
-    navigate("/");
+    navigate(communityLoginReturn(new URLSearchParams(window.location.search).get("next")));
   }
 
   return (

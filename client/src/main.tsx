@@ -12,6 +12,22 @@ import "./index.css";
 
 const queryClient = new QueryClient();
 
+// Private posts and account details must not survive an account switch in
+// memory. Query keys also include the account ID to isolate in-flight results.
+let previousAccount: string | null | undefined;
+supabase.auth.onAuthStateChange((_event, session) => {
+  const account = session?.user.id ?? null;
+  if (previousAccount !== undefined && previousAccount !== account) {
+    const filter = { predicate: (query: { queryKey: readonly unknown[] }) => {
+      const path = query.queryKey[0];
+      return Array.isArray(path) && (path[0] === "community" || path[0] === "auth");
+    } };
+    void queryClient.cancelQueries(filter);
+    queryClient.removeQueries(filter);
+  }
+  previousAccount = account;
+});
+
 const redirectToLoginIfUnauthorized = (error: unknown) => {
   if (!(error instanceof TRPCClientError)) return;
   if (typeof window === "undefined") return;

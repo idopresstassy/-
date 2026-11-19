@@ -3,11 +3,14 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import * as db from "./supabaseDb";
 import { creativeManuscriptTargetSchema, updateCreativeManuscriptSchema } from "../shared/creativeEditing";
+import { communityRouter } from "./community";
 import { deleteBookAudioCache, deleteLegacyBookAudioCache, getBookAudioMonthlyUsage, getLegacyBookAudioCachePreview, getOrCreateBookSentenceAudio, listBookAudioCache } from "./bookAudio";
 
 export const appRouter = router({
+  community: communityRouter,
   auth: router({
-    me: publicProcedure.query(opts => opts.ctx.user),
+    // Cache partition only: the verified session determines the returned user.
+    me: publicProcedure.input(z.object({ viewerKey: z.string().optional() }).optional()).query(opts => opts.ctx.user),
     // 세션은 브라우저의 Supabase 클라이언트가 종료합니다.
     logout: publicProcedure.mutation(() => ({ success: true } as const)),
   }),
