@@ -78,7 +78,7 @@ export default function Home() {
               </Button>
             ) : (
               <Button variant="ghost" size="sm" onClick={() => navigate(getSupabaseLoginRoute(navigator.userAgent))}>
-                <LogIn className="w-4 h-4 mr-1" /> 로그인
+                <LogIn className="w-4 h-4 mr-1" /> 로그인 · 가입
               </Button>
             )}
             {isAuthenticated && user?.role === "admin" && (

@@ -101,6 +101,9 @@ self.addEventListener("fetch", (event) => {
   // Skip non-GET requests
   if (request.method !== 'GET') return;
 
+  // OAuth callbacks/settings must never be served from the asset cache.
+  if (url.pathname === "/auth/callback" || url.pathname.startsWith("/auth/v1/")) return;
+
   // API requests - network only (with offline fallback for book content)
   if (url.pathname.startsWith('/api/')) {
     if (url.pathname.includes("/api/trpc/books.fetchGoogleDriveContent") || 

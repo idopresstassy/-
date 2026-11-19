@@ -65,6 +65,18 @@ class MainActivity : ComponentActivity() {
       }
     }
     if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
+      WebViewCompat.addWebMessageListener(webView, "MyeongjakAuth", setOf("https://korealib.com")) {
+        _, message, origin, mainFrame, _ ->
+        if (mainFrame && origin.scheme == "https" && origin.host == "korealib.com") {
+          val safeUrl = GoogleAuthLinks.authorizationUrl(message.data ?: "")
+          if (safeUrl != null) {
+            try { startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(safeUrl))) }
+            catch (_: Exception) {
+              webView.evaluateJavascript("window.dispatchEvent(new Event('myeongjak-auth-error'))", null)
+            }
+          }
+        }
+      }
       WebViewCompat.addWebMessageListener(webView, "MyeongjakAudioV2", setOf("https://korealib.com")) {
         _, message, origin, mainFrame, _ ->
         if (mainFrame && origin.scheme == "https" && origin.host == "korealib.com") {
@@ -91,7 +103,12 @@ class MainActivity : ComponentActivity() {
       isAppearanceLightNavigationBars = true
     }
     ViewCompat.requestApplyInsets(container)
-    webView.loadUrl("https://korealib.com")
+    webView.loadUrl(GoogleAuthLinks.webCallback(intent?.dataString ?: "") ?: "https://korealib.com")
+  }
+
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    GoogleAuthLinks.webCallback(intent.dataString ?: "")?.let { webView.loadUrl(it) }
   }
 
   private fun handleMessage(message: String) {

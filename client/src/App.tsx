@@ -11,6 +11,7 @@ import Bookshelf from "./pages/Bookshelf";
 import Creative from "./pages/Creative";
 import CommunityPage, { CommunityNewPage, CommunityPostPage } from "./components/Community";
 import Login from "./pages/Login";
+import AuthCallback from "./pages/AuthCallback";
 import Privacy from "./pages/Privacy";
 import ResetPassword from "./pages/ResetPassword";
 import { trpc } from "@/lib/trpc";
@@ -29,6 +30,7 @@ function Router() {
       <Route path={"/community/:id"} component={CommunityPostPage} />
       <Route path={"/community"} component={CommunityPage} />
       <Route path={"/login"} component={Login} />
+      <Route path={"/auth/callback"} component={AuthCallback} />
       <Route path={"/reset-password"} component={ResetPassword} />
       <Route path={"/privacy"} component={Privacy} />
       <Route path={"/404"} component={NotFound} />

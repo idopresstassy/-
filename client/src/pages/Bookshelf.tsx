@@ -12,7 +12,7 @@ import {
   Library,
   Loader2,
 } from "lucide-react";
-import { getLoginUrl } from "@/const";
+import { loginLink } from "@/lib/authNavigation";
 
 export default function Bookshelf() {
   const { user } = useAuth();
@@ -120,10 +120,10 @@ export default function Bookshelf() {
               오프라인 저장은 로그인 없이도 사용 가능합니다.
             </p>
             <a
-              href={getLoginUrl()}
+              href={loginLink("/bookshelf")}
               className="inline-block mt-2 text-sm font-medium text-amber-700 underline"
             >
-              로그인하기
+              로그인 · 무료 가입
             </a>
           </div>
         )}
