@@ -106,7 +106,7 @@ export default function Privacy() {
                 </thead>
                 <tbody className="align-top text-stone-700">
                   <tr>
-                    <td className="border border-stone-200 px-3 py-2 font-medium">회원가입·로그인</td>
+                    <td className="border border-stone-200 px-3 py-2 font-medium">이메일 회원가입·로그인</td>
                     <td className="border border-stone-200 px-3 py-2">
                       이메일 주소, 비밀번호, 가입 일시, 최근 로그인 일시, 권한(일반 회원/관리자)
                       <br />
@@ -193,6 +193,13 @@ export default function Privacy() {
               사용하지 않습니다.
             </p>
           </PolicySection>
+
+          <section className="mt-6 rounded-xl bg-stone-50 p-4 text-sm leading-7">
+            <h2 className="font-bold text-stone-900">Google 간편 로그인 안내 (연결 제공 시)</h2>
+            <p>Google 로그인을 선택하고 동의한 경우 Google에서 제공하는 이메일 주소, 이름, 계정 식별자와 프로필 이미지 주소를 인증 서비스인 Supabase가 받아 회원 식별과 로그인에 사용합니다. Google 비밀번호와 연락처 목록은 책방에 전달되지 않습니다. 직접 선택하지 않으면 Google 계정을 연결하지 않습니다.</p>
+            <p>Google 인증 화면 접속 시 Google에 IP 주소·브라우저 정보와 로그인 요청이 전달됩니다. Google에서 받은 회원 정보는 기존 회원 인증 정보와 함께 보관하고, 회원 탈퇴 시 같은 삭제 절차를 적용합니다. 단말기의 사진·파일에 접근하는 기능은 추가하지 않습니다. 이메일 가입과 가입 없이 책 읽기도 계속 이용할 수 있습니다.</p>
+            <p className="mt-2 text-stone-500">안내 추가: 2026년 11월 19일. Google 로그인은 연결 설정 완료 후 선택하여 이용하는 기능입니다.</p>
+          </section>
 
           <PolicySection number="3" title="개인정보의 이용 목적">
             <PolicyList
