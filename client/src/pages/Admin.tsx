@@ -1,4 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import { CommunityBoard } from "@/components/Community";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import CreativeManuscriptEditor from "@/components/CreativeManuscriptEditor";
@@ -10,7 +11,7 @@ import { CREATIVE_GENRES, CREATIVE_GENRE_LABELS, type CreativeGenre } from "@sha
 import { toast } from "sonner";
 import { useState, useRef, useMemo } from "react";
 import { useLocation } from "wouter";
-import { ChevronLeft, Plus, Trash2, Edit, Save, X, Upload, Loader2, Users, BarChart3, BookOpen, Mail, Send, Calendar, TrendingUp, PenLine, Check, Ban, Mic, Search } from "lucide-react";
+import { ChevronLeft, Plus, Trash2, Edit, Save, X, Upload, Loader2, Users, BarChart3, BookOpen, Mail, Send, Calendar, TrendingUp, PenLine, Check, Ban, Mic, Search, MessageSquare } from "lucide-react";
 import { Line, LineChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 
@@ -21,7 +22,7 @@ const GENRE_OPTIONS = [
   { value: "creative" as const, label: "창작" },
 ];
 
-type AdminTab = "dashboard" | "books" | "creative" | "audio" | "members" | "email" | "donation";
+type AdminTab = "community" | "dashboard" | "books" | "creative" | "audio" | "members" | "email" | "donation";
 
 const visitorChartConfig = {
   visitors: {
@@ -34,7 +35,7 @@ export default function Admin() {
   const { user, isAuthenticated, loading } = useAuth();
   const [, setLocation] = useLocation();
   const utils = trpc.useUtils();
-  const [activeTab, setActiveTab] = useState<AdminTab>("dashboard");
+  const [activeTab, setActiveTab] = useState<AdminTab>(() => new URLSearchParams(window.location.search).get("tab") === "community" ? "community" : "dashboard");
 
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center"><p>로딩 중...</p></div>;
@@ -66,6 +67,7 @@ export default function Admin() {
   const tabs = [
     { id: "dashboard" as const, label: "대시보드", icon: BarChart3 },
     { id: "books" as const, label: "도서 관리", icon: BookOpen },
+    { id: "community" as const, label: "독자마당 관리", icon: MessageSquare },
     { id: "creative" as const, label: "창작 원고 검수", icon: PenLine },
     { id: "audio" as const, label: "낭독 음성 관리", icon: Mic },
     { id: "members" as const, label: "회원 관리", icon: Users },
@@ -108,6 +110,7 @@ export default function Admin() {
       <div className="container py-8">
         {activeTab === "dashboard" && <DashboardTab />}
         {activeTab === "books" && <BooksTab utils={utils} />}
+        {activeTab === "community" && <CommunityBoard manage />}
         {activeTab === "creative" && <CreativeReviewTab utils={utils} />}
         {activeTab === "audio" && <AudioCacheTab utils={utils} />}
         {activeTab === "members" && <MembersTab />}

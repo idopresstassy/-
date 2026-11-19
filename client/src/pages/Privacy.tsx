@@ -141,6 +141,13 @@ export default function Privacy() {
                   </tr>
                   <tr>
                     <td className="border border-stone-200 px-3 py-2 font-medium">
+                      독자마당
+                    </td>
+                    <td className="border border-stone-200 px-3 py-2">회원 식별자, 닉네임, 글·댓글 내용, 관련 도서, 작성·수정 시각, 공개·숨김 상태, 답변 확인 시각</td>
+                    <td className="border border-stone-200 px-3 py-2">독자마당에 글·댓글을 쓰거나 내 글의 답변을 확인할 때</td>
+                  </tr>
+                  <tr>
+                    <td className="border border-stone-200 px-3 py-2">
                       자동 생성 정보
                       <br />
                       (비로그인 포함)
@@ -193,6 +200,7 @@ export default function Privacy() {
                 "회원 식별, 로그인 상태 유지, 비밀번호 재설정",
                 "읽기 진행도·책갈피·내 책장 저장과 다음 방문 시 복원",
                 "창작 작품 접수, 검수, 게시와 그 처리 기록 관리",
+                "독자마당 글·댓글 게시, 문의 답변, 새 답변 표시와 부적절한 게시물 관리",
                 "방문자 수와 인기 도서 집계(개인을 알아볼 수 없는 통계)",
                 "서비스 오류 대응과 안정성 확보",
                 "문의 응대, 서비스 운영에 필요한 안내 메일 발송",
@@ -204,6 +212,8 @@ export default function Privacy() {
             </p>
           </PolicySection>
 
+          <p className="rounded-xl bg-stone-50 p-4 text-sm leading-7">2026년 11월 19일 추가된 독자마당은 선택하여 이용하는 기능입니다. 공개 글·댓글의 닉네임과 내용은 누구나 볼 수 있으며, 비공개 문의의 제목·본문·댓글은 작성자와 관리자만 볼 수 있습니다. 계정 이메일은 게시판에 표시하지 않습니다. 내 글을 삭제하면 제목·본문과 해당 댓글 내용이 지워집니다. 삭제 여부·작성 시각 등 운영 기록과 답변 확인 기록은 회원 탈퇴 시 함께 삭제됩니다.</p>
+
           <PolicySection number="4" title="개인정보의 보관 기간과 파기">
             <PolicyList
               items={[
@@ -211,6 +221,7 @@ export default function Privacy() {
                 "창작 작품과 검수 기록: 게시 중단·삭제 요청 시까지",
                 "접속·열람 통계 기록: 수집일로부터 1년",
                 "이메일 문의 기록: 처리 완료 후 1년",
+                "독자마당 글·댓글 내용: 작성자의 삭제 또는 회원 탈퇴 시까지. 닉네임·답변 확인·운영 기록: 회원 탈퇴 시까지",
               ]}
             />
             <p>

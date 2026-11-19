@@ -123,3 +123,6 @@ client/public/__manus__/version.json
 public/file.svg
 notes-gdrive.md
 notes-gdrive.md
+
+# Supabase CLI local metadata
+supabase/.temp/

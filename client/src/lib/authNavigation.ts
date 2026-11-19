@@ -6,3 +6,14 @@ export const SUPABASE_PASSWORD_RESET_ROUTE = "/reset-password";
 export function getSupabaseLoginRoute(_userAgent?: string) {
   return SUPABASE_LOGIN_ROUTE;
 }
+
+/** Only return to known community routes after login; never accept an origin. */
+export function communityLoginReturn(next: string | null) {
+  if (!next || /[\\\r\n]/.test(next)) return "/";
+  try {
+    const url = new URL(next, "https://korealib.com");
+    if (!next.startsWith("/community") || url.origin !== "https://korealib.com") return "/";
+    if (!/^\/community(?:\/(?:new|[0-9a-f-]{36}))?$/.test(url.pathname)) return "/";
+    return url.pathname + url.search;
+  } catch { return "/"; }
+}

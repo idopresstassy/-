@@ -51,6 +51,7 @@ async function startServer() {
   // tRPC API
   app.use(
     "/api/trpc",
+    (_req, res, next) => { res.setHeader("Cache-Control", "private, no-store"); next(); },
     createExpressMiddleware({
       router: appRouter,
       createContext,
